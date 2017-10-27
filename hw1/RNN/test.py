@@ -3,13 +3,11 @@ import numpy as np
 import pickle as pk
 import tensorflow as tf
 
-'''
 def set_config(gpu_fraction=0.1):
     gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_fraction)
     config = tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True)
     #config = tf.ConfigProto(gpu_options=gpu_options)
     return config
-'''
 
 def make_map(data_dir):
     if data_dir[-1]!="/":
@@ -31,7 +29,7 @@ def make_map(data_dir):
             map_phone2alpha[s[0]] = s[2]
     return map_num2phone, map_48to39, map_phone2alpha
 
-def string_trim(s0):
+def string_compress(s0):
     s0 = s0.strip("L")
     prev, s = "", ""
     for c in s0:
@@ -40,14 +38,46 @@ def string_trim(s0):
             s += c
     return s
 
+def string_trim(s0):
+    ss = list(s0)
+    # Trim AABAA -> AAAAA
+    for i in range(2, len(ss)-2):
+        if ss[i-2]==ss[i-1] and ss[i-2]==ss[i+1] and ss[i-2]==ss[i+2]:
+            ss[i] = ss[i-2]
+    # Trim AABAC -> AAAAC
+    for i in range(2, len(ss)-2):
+        if ss[i-2]==ss[i-1] and ss[i-2]!=ss[i] and ss[i-2]==ss[i+1] and ss[i+2]!=ss[i]:
+            ss[i] = ss[i-2]
+    # Trim CABAA -> CAAAA
+    for i in range(2, len(ss)-2):
+        if ss[i+1]==ss[i+2] and ss[i+2]==ss[i-1] and ss[i-2]!=ss[i]  and ss[i]!=ss[i+2]:
+            ss[i] = ss[i+2]
+    # Trim AABCC -> AAACC or AACCC
+    for i in range(2, len(ss)-2):
+        if ss[i-1]==ss[i-2] and ss[i+1]==ss[i+2]:
+            ss[i] = ss[i-1]
+
+    s0 = ''.join(ss)
+    return s0
+
+def string_trim2(s0):
+    ss = list(s0)
+    for i in range(1, len(ss)-1):
+        if ss[i-1]==ss[i+1] and ss[i-1]!=ss[i]:
+            ss[i] = ss[i-1]
+    s0 = ''.join(ss)
+    return s0
+
 data_dir = sys.argv[1]
 if data_dir[-1] != "/":
     data_dir += "/"
 
-with tf.Session() as sess:
+config = set_config()
+with tf.Session(config=config) as sess:
 
     model = sys.argv[2]
-    model_file = tf.train.latest_checkpoint(data_dir+model)
+    #model_file = tf.train.latest_checkpoint(data_dir+model)
+    model_file = "/tmp2/b02902030/ADLxMLDS/hw1/data/model/bi_units_512_lr_0.001/epoch-25"
     print("Model file:", model_file)
     saver = tf.train.import_meta_graph(model_file+'.meta')
     saver.restore(sess, model_file)
@@ -75,11 +105,15 @@ with tf.Session() as sess:
             for instance in X.keys():
                 x_ = X[instance]
                 out = sess.run(output, {tf_x: x_})
+                out_v = np.argmax(out, 1)
                 out = np.argmax(out, 1)
                 s1 = ""
-                for k in out:
-                    s1 += map_phone2alpha[map_48to39[map_num2phone[k]]]
-                s1 = string_trim(s1)
+                for i in range(len(out)):
+                    if out_v[i]>0.0:
+                        s1 += map_phone2alpha[map_48to39[map_num2phone[out[i]]]]
+                #s1 = string_trim(s1)
+                s1 = string_trim2(s1)
+                s1 = string_compress(s1)
                 fw.write(instance+','+s1+'\n')
 
 

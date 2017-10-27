@@ -54,13 +54,15 @@ with tf.device('/gpu:0'):
     tf_x_r = tf.reshape(tf_x, [batch_size, -1, feature_size])  # 1 ,timestep, 39 
     tf_y = tf.placeholder(tf.int32, [None, 48]) # 1*timestep, 48
 
-    rnn_cell = tf.contrib.rnn.BasicLSTMCell(num_units=lstm_num_units)
-    states, (h_c, h_n) = tf.nn.dynamic_rnn(rnn_cell, tf_x_r, initial_state=None, dtype=tf.float32, time_major=False)
-    # states: 1, timestep, 128(lstm_num_units)
-    states = tf.reshape(states, [-1, lstm_num_units]) # -> 1*timestep, 128
-    output = tf.layers.dense(states, 48)
+    rnn_forward_cell = tf.contrib.rnn.BasicLSTMCell(num_units=lstm_num_units)
+    rnn_backward_cell = tf.contrib.rnn.BasicLSTMCell(num_units=lstm_num_units)
+    outputs, state = tf.nn.bidirectional_dynamic_rnn(rnn_forward_cell, rnn_backward_cell, tf_x_r, dtype=tf.float32)
+    # outputs: tuple, each 1, timestep, units
+    outputs = tf.concat(outputs, axis=2) # 1, timestep, units*2
+    outputs = tf.reshape(outputs, [-1, lstm_num_units*2]) # -> 1*timestep, units*2
+    output = tf.layers.dense(outputs, 48)
     loss = tf.reduce_mean(tf.losses.softmax_cross_entropy(onehot_labels=tf_y, logits=output, reduction="none"))
-    train_op = tf.train.RMSPropOptimizer(learning_rate=lr).minimize(loss)
+    train_op = tf.train.AdamOptimizer(learning_rate=lr).minimize(loss)
     #acc_op = tf.metrics.accuracy(labels=tf.argmax(tf_y, axis=1), predictions=tf.argmax(output, axis=1))[1]
     tf.add_to_collection('output', output)
     tf.add_to_collection('output', tf_x)
@@ -73,7 +75,7 @@ with tf.Session(config=config) as sess:
 
     saver = tf.train.Saver(max_to_keep=None)
     if restore=="true":
-        saver.restore(sess, data_dir+"model/units_"+str(lstm_num_units)+"_lr_"+str(lr)+"/epoch_"+str(last_epoch))
+        saver.restore(sess, data_dir+"model/bi_units_"+str(lstm_num_units)+"_lr_"+str(lr)+"/epoch_"+str(last_epoch))
     else:
         init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
         sess.run(init_op)
@@ -103,7 +105,7 @@ with tf.Session(config=config) as sess:
 
         print("Epoch:", epoch, " loss: ", loss_all/3326.0, " accuracy: ", acc_all/float(count_all))
 
-        saver.save(sess, data_dir+"model/units_"+str(lstm_num_units)+"_lr_"+str(lr)+"/epoch", global_step=epoch)
+        saver.save(sess, data_dir+"model/bi_units_"+str(lstm_num_units)+"_lr_"+str(lr)+"/epoch", global_step=epoch)
 
             
 

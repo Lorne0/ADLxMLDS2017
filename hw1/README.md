@@ -10,7 +10,8 @@ In hw1/, includes
 *	model\_best.py
 *	model\_best\_soft.py
 *	RNN/, CNN\_RNN/, Best/
-Where model\_best.py and model\_best\_soft.py are the training codes for the best model.
-Other files are in RNN/, CNN\_RNN/, Best/, e.g. preprocessing codes.
-Also the models are too large, so I put them in my Dropbox. 
-When testing, it needs to download by wget first.
+
+Where model\_best.py and model\_best\_soft.py are the training codes for the best model. <br />
+Other files are in RNN/, CNN\_RNN/, Best/, e.g. preprocessing codes. <br />
+Also the models are too large, so I put them in my Dropbox. <br />
+When testing, it needs to download by wget first. <br />

@@ -10,6 +10,7 @@ In hw1/, includes
 *	model\_best.py
 *	model\_best\_soft.py
 *	RNN/, CNN\_RNN/, Best/
+*	report.pdf
 
 Where model\_best.py and model\_best\_soft.py are the training codes for the best model. <br />
 Other files are in RNN/, CNN\_RNN/, Best/, e.g. preprocessing codes. <br />

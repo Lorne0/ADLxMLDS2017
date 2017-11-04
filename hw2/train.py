@@ -3,6 +3,7 @@ import json, re, time, random
 from collections import Counter
 import tensorflow as tf
 from tensorflow.python.layers.core import Dense
+from bleu_eval import BLEU
 ############# Read label and data ###################
 def read_data(data_path, vocab_size):
     #t1 = time.time()
@@ -207,8 +208,21 @@ decoder_inf = tf.contrib.seq2seq.BasicDecoder(decoder_cell, inf_helper, encoder_
 outputs_inf, _, _, = tf.contrib.seq2seq.dynamic_decode(decoder_inf, maximum_iterations=50)
 outputs_inf_words = outputs_inf.sample_id
 
-
 ###################################################################################
+
+def evaluate(output_id):
+    bleu = []
+    for i, v in enumerate(test_list):
+        bleu_v = []
+        s = []
+        for idx in output_id[i]:
+            s.append(Vocab[idx])
+        s = ' '.join(s)
+        for cap in test_label[v]:
+            bleu_v.append(BLEU(s, cap))
+        bleu.append(np.mean(bleu_v))
+    return np.mean(bleu)
+
 
 epoch_num = 200
 train_len = len(X_train)
@@ -236,11 +250,13 @@ with tf.Session() as sess:
                                                         tf_decoder_lens: decoder_lens})
         
         # Inference
-        output_sentences = sess.run(outputs_inf_words, {tf_encoder_input: ~,
-                                                        tf_bos: np.zeros(100, dtype=np.int32),
-                                                        tf_eos: 1})
-        print(output_sentences.shape)
-
+        output_sentences_id = sess.run(outputs_inf_words, {tf_encoder_input: encoder_input_test,
+                                                           tf_bos: np.zeros(100, dtype=np.int32),
+                                                           tf_eos: 1})
+        #print(output_sentences.shape)
+        # (100, 50)??
+        bleu_score = evaluate(output_sentences, test_list, X_test)
+        print("BLEU: %.4f" %(bleu_score))
 
         saver.save(sess, save_path, global_step=epoch)
 

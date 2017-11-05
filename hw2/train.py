@@ -1,5 +1,6 @@
 import numpy as np
-import json, re, time, random
+import json, re, time, random, os, sys
+from time import gmtime, strftime
 from collections import Counter
 import tensorflow as tf
 from tensorflow.python.layers.core import Dense
@@ -76,11 +77,11 @@ def read_data(data_path, vocab_size):
     # Read training data
     X_train = {}
     for v in train_list:
-        X_train[v] = np.load(data_path+'training_data/feat/'+v+'.npy')
+        X_train[v] = np.load(data_path+'training_data/feat/'+v+'.npy').astype(np.float32)
 
     X_test = {}
     for v in test_list:
-        X_test[v] = np.load(data_path+'testing_data/feat/'+v+'.npy')
+        X_test[v] = np.load(data_path+'testing_data/feat/'+v+'.npy').astype(np.float32)
         
     print("Size of training data: %d" %(len(X_train)))
     print("Size of testing data: %d" %(len(X_test)))
@@ -99,6 +100,7 @@ def word2onehot(word, Vocab, vocab_size):
         z[Vocab.index(word)] = 1.0
     return z
 
+'''
 def sentences2onehot(sentences, Vocab, batch_size, decoder_max_len):
     vocab_size = len(Vocab)
     decoder_target = np.zeros((batch_size, decoder_max_len, vocab_size))
@@ -116,32 +118,43 @@ def sentences2onehot(sentences, Vocab, batch_size, decoder_max_len):
     #decoder_input[:, 0, 1] = 0.0 # make first element as bos
     #decoder_input[:, 0, 0] = 1.0 # make first element as bos
     return decoder_input, decoder_target
+'''
 
 def sentences2ids(sentences, Vocab, batch_size, decoder_max_len):
-    decoder_input = np.ones((batch_size, decoder_max_len)) # make every element as eos
-    decoder_target = np.ones((batch_size, decoder_max_len)) # make every element as eos
+    decoder_input = np.ones((batch_size, decoder_max_len), dtype=np.int32) # make every element as eos
+    decoder_target = np.ones((batch_size, decoder_max_len), dtype=np.int32) # make every element as eos
     for b in range(batch_size):
         sen_target = sentences[b].split()
         sen_input = sentences[b].split()
         sen_input.insert(0, Vocab[0]) # add bos at first
-        for w in range(len(sen_input)):
-            idx = 2 if w not in Vocab else Vocab.index(w)
-            decoder_input[b][w] = idx
-            if w>0:
-                decoder_target[b][w-1] = idx
+        for i in range(len(sen_input)):
+            idx = 2 if sen_input[i] not in Vocab else Vocab.index(sen_input[i])
+            decoder_input[b][i] = idx
+            if i>0:
+                decoder_target[b][i-1] = idx
 
     return decoder_input, decoder_target
 
-def gen_test_data(test_list, X_test)
+def gen_test_data(test_list, X_test, test_label, Vocab):
     test_size = len(test_list)
-    encoder_input_test = np.zeros((test_size, 80, 4096))
+    encoder_input_test = np.zeros((test_size, 80, 4096), dtype=np.float32)
     for t in range(test_size):
         encoder_input_test[t] = X_test[test_list[t]]
-    return encoder_input_test
+    #----------#
+    sentences = []
+    decoder_lens_test = []
+    for t in range(test_size):
+        sentences.append(random.choice(test_label[test_list[t]]))
+        decoder_lens_test.append(len(sentences[t].split())+1)
+    #decoder_input, decoder_target = sentences2onehot(sentences, Vocab, batch_size, decoder_max_len)
+    decoder_max_len = max(decoder_lens_test)
+    decoder_input_test, decoder_target_test = sentences2ids(sentences, Vocab, test_size, decoder_max_len)
 
-def gen_batch(batch_list, X_train, train_label, Vocab, batch_size):
+    return encoder_input_test, decoder_input_test, decoder_target_test, decoder_lens_test
+
+def gen_batch(batch_list, X_train, train_label, Vocab):
     batch_size = len(batch_list)
-    encoder_input = np.zeros((batch_size, 80, 4096))
+    encoder_input = np.zeros((batch_size, 80, 4096), dtype=np.float32)
     for b in range(batch_size):
         encoder_input[b] = X_train[batch_list[b]]
     #----------#
@@ -152,62 +165,71 @@ def gen_batch(batch_list, X_train, train_label, Vocab, batch_size):
         decoder_lens.append(len(sentences[b].split())+1)
     #decoder_input, decoder_target = sentences2onehot(sentences, Vocab, batch_size, decoder_max_len)
     decoder_max_len = max(decoder_lens)
-    decoder_input, decoder_target = senteces2ids(sentences, Vocab, batch_size, decoder_max_len)
+    decoder_input, decoder_target = sentences2ids(sentences, Vocab, batch_size, decoder_max_len)
     
     return encoder_input, decoder_input, decoder_target, decoder_lens
 
-data_path = "/dhome/b02902030/ADLxMLDS/hw2/MLDS_hw2_data/"
+#data_path = "/dhome/b02902030/ADLxMLDS/hw2/MLDS_hw2_data/"
+data_path = sys.argv[1]
+if data_path[-1] != '/':
+    data_path += '/'
 vocab_size = 4000
 
 t1 = time.time()
 Vocab, train_list, test_list, X_train, X_test, train_label, test_label = read_data(data_path, vocab_size)
 t2 = time.time()
-print("Time: %fs" %(t2-t1))
+print("Read Data Time: %fs" %(t2-t1))
 print("========= Preprocessing done =========")
 
 
 ############ Build model ##########################################
 num_units = 256
-embedding_size = 128
-lr = 0.001
+embedding_size = 300
+lr = 1e-4
+
+print("num_units: %d, embedding_size: %d, lr: %f" %(num_units, embedding_size, lr))
 
 # placeholder
-tf_encoder_input = tf.placeholder(tf.float64, shape=[None, 80, 4096]) # (batch_size, 80, 4096)
-tf_decoder_input = tf.placeholder(tf.float64, shape=[None, None, vocab_size]) # (batch_size, decoder_max_len, vocab_size)
-tf_decoder_target = tf.placeholder(tf.float64, shape=[None, None, vocab_size]) # (batch_size, decoder_max_len, vocab_size)
+tf_encoder_input = tf.placeholder(tf.float32, shape=[None, 80, 4096]) # (batch_size, 80, 4096)
+tf_decoder_input = tf.placeholder(tf.int32, shape=[None, None]) # (batch_size, decoder_max_len)
+tf_decoder_target = tf.placeholder(tf.int32, shape=[None, None]) # (batch_size, decoder_max_len)
 tf_decoder_seq_len = tf.placeholder(tf.int32, shape=[None]) # (batch_size), each length of sentences 
 tf_decoder_max_len = tf.reduce_max(tf_decoder_seq_len)
 
 # Encoder
 encoder_cell = tf.nn.rnn_cell.BasicLSTMCell(num_units)
-encoder_output, encoder_state = tf.nn.dynamic_rnn(encoder_cell, tf_encoder_input)
+encoder_output, encoder_state = tf.nn.dynamic_rnn(encoder_cell, tf_encoder_input, dtype=tf.float32)
 
 # Decoder
 # Embedding
 embedding_decoder = tf.Variable(tf.truncated_normal(shape=[vocab_size, embedding_size], stddev=0.1))
-emb_decoder_input = tf.nn.embedding_lookup(embedding_decoder, tf_decoder_input)
+with tf.device('/cpu:0'):
+    emb_decoder_input = tf.nn.embedding_lookup(embedding_decoder, tf_decoder_input)
 # decoder
 decoder_cell = tf.nn.rnn_cell.BasicLSTMCell(num_units)
 train_helper = tf.contrib.seq2seq.TrainingHelper(emb_decoder_input, tf_decoder_seq_len)
 projection_layer = Dense(vocab_size)
-decoder = tf.contrib.seq2seq.BasicDecoder(decoder_cell, helper, encoder_state, output_layer=projection_layer)
+decoder = tf.contrib.seq2seq.BasicDecoder(decoder_cell, train_helper, encoder_state, output_layer=projection_layer)
 outputs, _, _ = tf.contrib.seq2seq.dynamic_decode(decoder)
 logits = outputs.rnn_output
 
 # loss and train_op
 cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf_decoder_target, logits=logits)
 decoder_mask = tf.sequence_mask(tf_decoder_seq_len, tf_decoder_max_len, dtype=logits.dtype)
-loss = (tf.reduce_sum(cross_entropy*decoder_mask)/tf.to_float(batch_size))
+#loss = (tf.reduce_sum(cross_entropy*decoder_mask)/tf.to_float(batch_size))
+loss = tf.reduce_sum(cross_entropy*decoder_mask)
 train_op = tf.train.AdamOptimizer(learning_rate=lr).minimize(loss)
 
 # Inference
-tf_bos = tf.placeholder(tf.int32, shape[None]) # (batch_size), [0,0,0...]
-tf_eos = tf.placeholder(tf.int32, shape[1])
+tf_bos = tf.placeholder(tf.int32, shape=[None]) # (batch_size), [0,0,0...]
+tf_eos = 1
 inf_helper = tf.contrib.seq2seq.GreedyEmbeddingHelper(embedding_decoder, tf_bos, tf_eos) # no embedding
 decoder_inf = tf.contrib.seq2seq.BasicDecoder(decoder_cell, inf_helper, encoder_state, output_layer=projection_layer)
 outputs_inf, _, _, = tf.contrib.seq2seq.dynamic_decode(decoder_inf, maximum_iterations=50)
 outputs_inf_words = outputs_inf.sample_id
 
+t3 = time.time()
+print("Build Graph Time: %fs" %(t3-t2))
 ###################################################################################
 
 def evaluate(output_id):
@@ -223,8 +245,7 @@ def evaluate(output_id):
         bleu.append(np.mean(bleu_v))
     return np.mean(bleu)
 
-
-epoch_num = 200
+epoch_num = 100
 train_len = len(X_train)
 test_len = len(X_test)
 batch_size = 32
@@ -232,33 +253,61 @@ train_batch_num = int(train_len/batch_size)+1
 test_batch_num = int(test_len/batch_size)+1
 print("Training batch number: %d" %(train_batch_num))
 print("Testing batch number: %d" %(test_batch_num))
-save_path = "~/ADLxMLDS/hw2/model/lstm_256_simple/epoch"
 
-encoder_input_test = gen_test_data(test_list, X_test)
+encoder_input_test, decoder_input_test, decoder_target_test, decoder_lens_test = gen_test_data(test_list, X_test, test_label, Vocab)
 
+save_path = "/home/aria0/ADLxMLDS2017/hw2/model/lstm_256_simple/"
 saver = tf.train.Saver(max_to_keep=None)
 with tf.Session() as sess:
-    for epoch in range(1, epoch_num+1):
-        # Train
-        for b in range(train_batch_num):
-            encoder_input, decoder_input, decoder_target, decoder_lens = \
-                gen_batch(train_list[b*batch_size:(b+1)*batch_size], X_train, train_label, Vocab, batch_size)
-        
-            _, train_loss = sess.run([train_op, loss], {tf_encoder_input: encoder_input,
-                                                        tf_decoder_input: decoder_input,
-                                                        tf_decoder_target: decoder_target,
-                                                        tf_decoder_lens: decoder_lens})
-        
-        # Inference
-        output_sentences_id = sess.run(outputs_inf_words, {tf_encoder_input: encoder_input_test,
-                                                           tf_bos: np.zeros(100, dtype=np.int32),
-                                                           tf_eos: 1})
-        #print(output_sentences.shape)
-        # (100, 50)??
-        bleu_score = evaluate(output_sentences, test_list, X_test)
-        print("BLEU: %.4f" %(bleu_score))
+    datetime = strftime("%Y-%m-%d %H:%M:%S", gmtime())
+    with open(save_path+"train_log.txt", "a+") as fw:
+        fw.write('\n'+str(datetime)+'\n')
 
-        saver.save(sess, save_path, global_step=epoch)
+        init_op = tf.global_variables_initializer()
+        sess.run(init_op)
+
+        for epoch in range(1, epoch_num+1):
+            print("Epoch: %d" %(epoch))
+            # Train
+            train_total_loss = 0.0
+            for b in range(train_batch_num):
+                encoder_input, decoder_input, decoder_target, decoder_lens = \
+                    gen_batch(train_list[b*batch_size:(b+1)*batch_size], X_train, train_label, Vocab)
+            
+                _, train_loss = sess.run([train_op, loss], {tf_encoder_input: encoder_input,
+                                                            tf_decoder_input: decoder_input,
+                                                            tf_decoder_target: decoder_target,
+                                                            tf_decoder_seq_len: decoder_lens})
+                train_total_loss += train_loss
+
+            train_total_loss /= len(train_list)
+            
+            # Inference
+            output_sentences_id, test_loss = sess.run([outputs_inf_words, loss], 
+                                                        {tf_encoder_input: encoder_input_test,
+                                                         tf_decoder_input: decoder_input_test,
+                                                         tf_decoder_target: decoder_target_test,
+                                                         tf_decoder_seq_len: decoder_lens_test,
+                                                         tf_bos: np.zeros(100, dtype=np.int32)})
+            #print(output_sentences.shape)
+            # (100, 50)??
+            test_loss /= len(test_list)
+            bleu_score = evaluate(output_sentences_id)
+            
+            '''
+            s = []
+            for idx in output_sentences_id[0]:
+                s.append(Vocab[idx])
+            s = ' '.join(s)
+            print(s)
+            '''
+
+            # log
+            print("Train loss: %.4f | Test loss: %.4f | BLEU: %.4f" %(train_total_loss, test_loss, bleu_score))
+            fw.write("Epoch: %d | Train loss: %.4f | Test loss: %.4f | BLEU: %.4f\n" %(epoch, train_total_loss, test_loss, bleu_score))
+            fw.flush()
+
+            saver.save(sess, save_path+"epoch", global_step=epoch)
 
 
 

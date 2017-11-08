@@ -34,10 +34,11 @@ def read_data(data_path, vocab_size):
     for i in range(len(d)):
         test_label[d[i]['id']] = []
         for c in d[i]['caption']:
-            s = regex.sub(' ', c).lower().split()
-            Vocab += s
-            if len(s)>=5 and len(s)<=35:
-                test_label[d[i]['id']].append(' '.join(s))
+            #s = regex.sub(' ', c).lower().split()
+            test_label[d[i]['id']].append(c.lower())
+            #Vocab += s
+            #if len(s)>=5 and len(s)<=35:
+            #    test_label[d[i]['id']].append(' '.join(s))
 
     train_list = list(train_label.keys())
     test_list = list(test_label.keys())
@@ -67,12 +68,8 @@ def read_data(data_path, vocab_size):
     Vocab = sorted(Vocab, key=Vocab.get, reverse=True)
     print("Vocab size before delete: %d" %(len(Vocab)))
     Vocab = Vocab[:vocab_size-3]
-    #Vocab.extend([unk, bos, eos])
     Vocab = [bos, eos, unk] + Vocab
     print("Vocab size after delete: %d" %(len(Vocab)))
-
-    #t2 = time.time()
-    #print("Time: %fs" %(t2-t1))
 
     # Read training data
     X_train = {}
@@ -86,40 +83,9 @@ def read_data(data_path, vocab_size):
     print("Size of training data: %d" %(len(X_train)))
     print("Size of testing data: %d" %(len(X_test)))
 
-    #t3 = time.time()
-    #print("Time: %fs" %(t3-t2))
-
     return Vocab, train_list, test_list, X_train, X_test, train_label, test_label
 
 #####################################################
-def word2onehot(word, Vocab, vocab_size):
-    z = np.zeros((vocab_size))
-    if word not in Vocab:
-        z[2] = 1.0 # unknown
-    else:
-        z[Vocab.index(word)] = 1.0
-    return z
-
-'''
-def sentences2onehot(sentences, Vocab, batch_size, decoder_max_len):
-    vocab_size = len(Vocab)
-    decoder_target = np.zeros((batch_size, decoder_max_len, vocab_size))
-    decoder_target[:, :, 1] = 1.0 # make every element as eos
-    decoder_input = decoder_target.copy()
-    for b in range(batch_size):
-        sen_target = sentences[b].split()
-        sen_input = sentences[b].split()
-        sen_input.insert(0, Vocab[0]) # add bos at first
-        for d in range(len(sen_target)):
-            # wrong
-            #decoder_target[b][d] = word2onehot(sen_target[d], Vocab, vocab_size)
-            #if d>0:
-            #    decoder_input[b][d] = word2onehot(sen_input[d], Vocab, vocab_size)
-    #decoder_input[:, 0, 1] = 0.0 # make first element as bos
-    #decoder_input[:, 0, 0] = 1.0 # make first element as bos
-    return decoder_input, decoder_target
-'''
-
 def sentences2ids(sentences, Vocab, batch_size, decoder_max_len):
     decoder_input = np.ones((batch_size, decoder_max_len), dtype=np.int32) # make every element as eos
     decoder_target = np.ones((batch_size, decoder_max_len), dtype=np.int32) # make every element as eos
@@ -169,10 +135,11 @@ def gen_batch(batch_list, X_train, train_label, Vocab):
     
     return encoder_input, decoder_input, decoder_target, decoder_lens
 
+################# Setting ######################
 #data_path = "/dhome/b02902030/ADLxMLDS/hw2/MLDS_hw2_data/"
-data_path = sys.argv[1]
-if data_path[-1] != '/':
-    data_path += '/'
+data_path = sys.argv[1] + '/' if sys.argv[1][-1]!='/' else sys.argv[1]
+save_path = sys.argv[2] + '/' if sys.argv[2][-1]!='/' else sys.argv[2]
+
 vocab_size = 4000
 
 t1 = time.time()
@@ -223,10 +190,18 @@ train_op = tf.train.AdamOptimizer(learning_rate=lr).minimize(loss)
 # Inference
 tf_bos = tf.placeholder(tf.int32, shape=[None]) # (batch_size), [0,0,0...]
 tf_eos = 1
-inf_helper = tf.contrib.seq2seq.GreedyEmbeddingHelper(embedding_decoder, tf_bos, tf_eos) # no embedding
+inf_helper = tf.contrib.seq2seq.GreedyEmbeddingHelper(embedding_decoder, tf_bos, tf_eos)
 decoder_inf = tf.contrib.seq2seq.BasicDecoder(decoder_cell, inf_helper, encoder_state, output_layer=projection_layer)
 outputs_inf, _, _, = tf.contrib.seq2seq.dynamic_decode(decoder_inf, maximum_iterations=50)
 outputs_inf_words = outputs_inf.sample_id
+
+tf.add_to_collection('for_test', outputs_inf_words)
+tf.add_to_collection('for_test', loss)
+tf.add_to_collection('for_test', tf_encoder_input)
+tf.add_to_collection('for_test', tf_decoder_input)
+tf.add_to_collection('for_test', tf_decoder_target)
+tf.add_to_collection('for_test', tf_decoder_seq_len)
+tf.add_to_collection('for_test', tf_bos)
 
 t3 = time.time()
 print("Build Graph Time: %fs" %(t3-t2))
@@ -238,17 +213,22 @@ def evaluate(output_id):
         bleu_v = []
         s = []
         for idx in output_id[i]:
-            s.append(Vocab[idx])
+            if idx > 2:
+                s.append(Vocab[idx])
         s = ' '.join(s)
+        if i==0:
+            print(s)
+            print(test_label[v][0])
         for cap in test_label[v]:
             bleu_v.append(BLEU(s, cap))
         bleu.append(np.mean(bleu_v))
     return np.mean(bleu)
 
-epoch_num = 100
+epoch_num = 150
+batch_size = 32
+print("epoch_num: %d | batch_size: %d" %(epoch_num, batch_size))
 train_len = len(X_train)
 test_len = len(X_test)
-batch_size = 32
 train_batch_num = int(train_len/batch_size)+1
 test_batch_num = int(test_len/batch_size)+1
 print("Training batch number: %d" %(train_batch_num))
@@ -256,7 +236,7 @@ print("Testing batch number: %d" %(test_batch_num))
 
 encoder_input_test, decoder_input_test, decoder_target_test, decoder_lens_test = gen_test_data(test_list, X_test, test_label, Vocab)
 
-save_path = "/home/aria0/ADLxMLDS2017/hw2/model/lstm_256_simple/"
+#save_path = "/home/aria0/ADLxMLDS2017/hw2/model/lstm_256_simple/"
 saver = tf.train.Saver(max_to_keep=None)
 with tf.Session() as sess:
     datetime = strftime("%Y-%m-%d %H:%M:%S", gmtime())
@@ -266,6 +246,8 @@ with tf.Session() as sess:
         init_op = tf.global_variables_initializer()
         sess.run(init_op)
 
+        best_bleu = 0.0
+        num_save = 0
         for epoch in range(1, epoch_num+1):
             print("Epoch: %d" %(epoch))
             # Train
@@ -293,21 +275,19 @@ with tf.Session() as sess:
             # (100, 50)??
             test_loss /= len(test_list)
             bleu_score = evaluate(output_sentences_id)
-            
-            '''
-            s = []
-            for idx in output_sentences_id[0]:
-                s.append(Vocab[idx])
-            s = ' '.join(s)
-            print(s)
-            '''
+
+            if best_bleu<bleu_score:
+                best_bleu = bleu_score
+                if bleu_score>=0.27:
+                    saver.save(sess, save_path+"epoch_"+str(epoch))
+                    num_save+=1
 
             # log
-            print("Train loss: %.4f | Test loss: %.4f | BLEU: %.4f" %(train_total_loss, test_loss, bleu_score))
-            fw.write("Epoch: %d | Train loss: %.4f | Test loss: %.4f | BLEU: %.4f\n" %(epoch, train_total_loss, test_loss, bleu_score))
+            print("Train loss: %.4f | Test loss: %.4f | BLEU: %.4f | Best: %.4f" %(train_total_loss, test_loss, bleu_score, best_bleu))
+            fw.write("Epoch: %d | Train loss: %.4f | Test loss: %.4f | BLEU: %.4f | Best: %.4f\n" %(epoch, train_total_loss, test_loss, bleu_score, best_bleu))
             fw.flush()
 
-            saver.save(sess, save_path+"epoch", global_step=epoch)
+        print("num_save: %d" %(num_save))
 
 
 

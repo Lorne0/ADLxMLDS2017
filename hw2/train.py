@@ -150,11 +150,16 @@ print("========= Preprocessing done =========")
 
 
 ############ Build model ##########################################
+def build_multi_cell(num_units, num_layers):
+    layers = [tf.contrib.rnn.LSTMCell(num_units) for _ in range(num_layers)]
+    return tf.contrib.rnn.MultiRNNCell(layers)
+
 num_units = 256
+num_layers = 2
 embedding_size = 300
 lr = 1e-4
 
-print("num_units: %d, embedding_size: %d, lr: %f" %(num_units, embedding_size, lr))
+print("num_units: %d | num_layers: %d | embedding_size: %d| lr: %f" %(num_units, num_layers, embedding_size, lr))
 
 # placeholder
 tf_encoder_input = tf.placeholder(tf.float32, shape=[None, 80, 4096]) # (batch_size, 80, 4096)
@@ -164,8 +169,21 @@ tf_decoder_seq_len = tf.placeholder(tf.int32, shape=[None]) # (batch_size), each
 tf_decoder_max_len = tf.reduce_max(tf_decoder_seq_len)
 
 # Encoder
-encoder_cell = tf.nn.rnn_cell.BasicLSTMCell(num_units)
-encoder_output, encoder_state = tf.nn.dynamic_rnn(encoder_cell, tf_encoder_input, dtype=tf.float32)
+encoder_fw_cell = build_multi_cell(num_units, num_layers)
+encoder_bw_cell = build_multi_cell(num_units, num_layers)
+(fw_out,bw_out), (fw_state, bw_state) = tf.nn.bidirectional_dynamic_rnn(encoder_fw_cell, encoder_bw_cell, tf_encoder_input, dtype=tf.float32)
+
+encoder_state = []
+for i in range(num_layers):
+    if isinstance(fw_state[i], tf.contrib.rnn.LSTMStateTuple):
+        state_c = tf.add(fw_state[i].c, bw_state[i].c)
+        state_h = tf.add(fw_state[i].h, bw_state[i].h)
+        state = tf.contrib.rnn.LSTMStateTuple(c=state_c, h=state_h)
+    elif isinstance(fw_state[i], tf.Tensor):
+        state = tf.add(fw_state[i], bw_state[i])
+    encoder_state.append(state)
+encoder_state = tuple(encoder_state)
+encoder_output = tf.add(fw_out, bw_out)
 
 # Decoder
 # Embedding
@@ -173,10 +191,18 @@ embedding_decoder = tf.Variable(tf.truncated_normal(shape=[vocab_size, embedding
 with tf.device('/cpu:0'):
     emb_decoder_input = tf.nn.embedding_lookup(embedding_decoder, tf_decoder_input)
 # decoder
-decoder_cell = tf.nn.rnn_cell.BasicLSTMCell(num_units)
+# attention
+attention_mechanism = tf.contrib.seq2seq.LuongAttention(num_units, encoder_output)
+decoder_cell = build_multi_cell(num_units, num_layers)
+decoder_cell = tf.contrib.seq2seq.AttentionWrapper(decoder_cell, attention_mechanism, attention_layer_size=num_units)
+tf_batch_size = tf.shape(tf_encoder_input)[0]
+decoder_initial_state = decoder_cell.zero_state(tf_batch_size, tf.float32).clone(cell_state=encoder_state)
+#decoder_initial_state = decoder_cell.zero_state(batch_size, tf.float32)
+
 train_helper = tf.contrib.seq2seq.TrainingHelper(emb_decoder_input, tf_decoder_seq_len)
 projection_layer = Dense(vocab_size)
-decoder = tf.contrib.seq2seq.BasicDecoder(decoder_cell, train_helper, encoder_state, output_layer=projection_layer)
+#decoder = tf.contrib.seq2seq.BasicDecoder(decoder_cell, train_helper, encoder_state, output_layer=projection_layer)
+decoder = tf.contrib.seq2seq.BasicDecoder(decoder_cell, train_helper, decoder_initial_state, output_layer=projection_layer)
 outputs, _, _ = tf.contrib.seq2seq.dynamic_decode(decoder)
 logits = outputs.rnn_output
 
@@ -191,7 +217,7 @@ train_op = tf.train.AdamOptimizer(learning_rate=lr).minimize(loss)
 tf_bos = tf.placeholder(tf.int32, shape=[None]) # (batch_size), [0,0,0...]
 tf_eos = 1
 inf_helper = tf.contrib.seq2seq.GreedyEmbeddingHelper(embedding_decoder, tf_bos, tf_eos)
-decoder_inf = tf.contrib.seq2seq.BasicDecoder(decoder_cell, inf_helper, encoder_state, output_layer=projection_layer)
+decoder_inf = tf.contrib.seq2seq.BasicDecoder(decoder_cell, inf_helper, decoder_initial_state, output_layer=projection_layer)
 outputs_inf, _, _, = tf.contrib.seq2seq.dynamic_decode(decoder_inf, maximum_iterations=50)
 outputs_inf_words = outputs_inf.sample_id
 
@@ -271,14 +297,13 @@ with tf.Session() as sess:
                                                          tf_decoder_target: decoder_target_test,
                                                          tf_decoder_seq_len: decoder_lens_test,
                                                          tf_bos: np.zeros(100, dtype=np.int32)})
-            #print(output_sentences.shape)
-            # (100, 50)??
+
             test_loss /= len(test_list)
             bleu_score = evaluate(output_sentences_id)
 
             if best_bleu<bleu_score:
                 best_bleu = bleu_score
-                if bleu_score>=0.27:
+                if bleu_score>=0.29:
                     saver.save(sess, save_path+"epoch_"+str(epoch))
                     num_save+=1
 

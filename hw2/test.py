@@ -46,8 +46,16 @@ def read_data(data_path, vocab_size):
     X_test = {}
     for v in test_list:
         X_test[v] = np.load(data_path+'testing_data/feat/'+v+'.npy').astype(np.float32)
+
+    peer_list = []
+    with open(data_path+"peer_review_id.txt") as fp:
+        for f in fp:
+            peer_list.append(f.strip('\n'))
+    X_peer = {}
+    for v in peer_list:
+        X_peer[v] = np.load(data_path+'peer_review/feat/'+v+'.npy').astype(np.float32)
         
-    return Vocab, test_list, X_test, test_label
+    return Vocab, test_list, X_test, test_label, peer_list, X_peer
 
 #####################################################
 def sentences2ids(sentences, Vocab, batch_size, decoder_max_len):
@@ -80,20 +88,13 @@ def gen_test_data(test_list, X_test, test_label, Vocab):
 
     return encoder_input_test, decoder_input_test, decoder_target_test, decoder_lens_test
 
-def gen_batch(batch_list, X_train, train_label, Vocab):
-    batch_size = len(batch_list)
-    encoder_input = np.zeros((batch_size, 80, 4096), dtype=np.float32)
-    for b in range(batch_size):
-        encoder_input[b] = X_train[batch_list[b]]
-    sentences = []
-    decoder_lens = []
-    for b in range(batch_size):
-        sentences.append(random.choice(train_label[batch_list[b]]))
-        decoder_lens.append(len(sentences[b].split())+1)
-    decoder_max_len = max(decoder_lens)
-    decoder_input, decoder_target = sentences2ids(sentences, Vocab, batch_size, decoder_max_len)
-    
-    return encoder_input, decoder_input, decoder_target, decoder_lens
+def gen_peer_data(peer_list, X_peer):
+    peer_size = len(peer_list)
+    encoder_input_peer = np.zeros((peer_size, 80, 4096), dtype=np.float32)
+    for t in range(peer_size):
+        encoder_input_peer[t] = X_peer[peer_list[t]]
+
+    return encoder_input_peer
 
 ################# Setting ######################
 data_path = sys.argv[1] + '/' if sys.argv[1][-1]!='/' else sys.argv[1]
@@ -102,24 +103,27 @@ data_path = sys.argv[1] + '/' if sys.argv[1][-1]!='/' else sys.argv[1]
 vocab_size = 4000
 
 t1 = time.time()
-Vocab, test_list, X_test, test_label = read_data(data_path, vocab_size)
+Vocab, test_list, X_test, test_label, peer_list, X_peer = read_data(data_path, vocab_size)
 t2 = time.time()
 
 
 ############ Build model ##########################################
-num_units = 256
+num_units = 512
+num_layers = 3
 embedding_size = 300
-lr = 1e-4
+lr = 1e-4*0.8
 ###################################################################################
 mode = sys.argv[2] # all, sp
-output_file = sys.argv[3]
+model_file = sys.argv[3]
+output_file = sys.argv[4]
+pr_output_file = sys.argv[5]
 
 encoder_input_test, decoder_input_test, decoder_target_test, decoder_lens_test = gen_test_data(test_list, X_test, test_label, Vocab)
+encoder_input_peer = gen_peer_data(peer_list, X_peer)
 
 with tf.Session() as sess:
 
     #model_file = './test_model/epoch_61'
-    model_file = sys.argv[4]
     saver = tf.train.import_meta_graph(model_file+'.meta')
     saver.restore(sess, model_file)
     outputs_inf_words = tf.get_collection('for_test')[0]
@@ -129,12 +133,14 @@ with tf.Session() as sess:
     tf_decoder_target = tf.get_collection('for_test')[4]
     tf_decoder_seq_len = tf.get_collection('for_test')[5]
     tf_bos = tf.get_collection('for_test')[6]
+    tf_prob = tf.get_collection('for_test')[7]
     
     output_sentences_id, test_loss = sess.run([outputs_inf_words, loss], 
                                                 {tf_encoder_input: encoder_input_test,
                                                  tf_decoder_input: decoder_input_test,
                                                  tf_decoder_target: decoder_target_test,
                                                  tf_decoder_seq_len: decoder_lens_test,
+                                                 tf_prob: 1,
                                                  tf_bos: np.zeros(100, dtype=np.int32)})
 
     sens = []
@@ -155,6 +161,29 @@ with tf.Session() as sess:
             sp_video = ["klteYv1Uv9A_27_33.avi", "5YJaS2Eswg0_22_26.avi", "UbmZAe5u5FI_132_141.avi", "JntMAcTlOF0_50_70.avi", "tJHUH9tpqPg_113_118.avi"]
             for v in sp_video:
                 fw.write(v+','+sens[test_list.index(v)]+'\n')
+
+    ######## peer review #########
+    output_sentences_id = sess.run(outputs_inf_words, 
+                                    {tf_encoder_input: encoder_input_peer,
+                                     tf_prob: 1,
+                                     tf_bos: np.zeros(len(peer_list), dtype=np.int32)})
+    sens = []
+    for i in range(len(peer_list)):
+        s = []
+        for idx in output_sentences_id[i]:
+            if idx > 2:
+                s.append(Vocab[idx])
+        s = ' '.join(s)
+        sens.append(s)
+
+    with open(pr_output_file, "w") as fw:
+        for i in range(len(peer_list)):
+            fw.write(peer_list[i]+','+sens[i]+'\n')
+            
+
+
+
+
 
 
 

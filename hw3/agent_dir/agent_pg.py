@@ -14,8 +14,6 @@ class Agent_PG(Agent):
             print('loading trained model')
 
         ##################
-        # YOUR CODE HERE #
-        ##################
         self.n_features = 6400
         self.n_actions = 6
         self.lr = 1e-4
@@ -29,30 +27,17 @@ class Agent_PG(Agent):
         self.tf_a = tf.placeholder(tf.int32, [None, ])
         self.tf_vt = tf.placeholder(tf.float32, [None, ])
 
-        #fc1
-        layer1 = tf.layers.dense(
-            inputs = self.tf_s,
-            units = 400,
-            activation = tf.nn.relu,
-            kernel_initializer = tf.random_normal_initializer(mean=0, stddev=0.3),
-            bias_initializer = tf.constant_initializer(0.1),
-        )
-        #fc2
-        layer2 = tf.layers.dense(
-            inputs = layer1,
-            units = 200,
-            activation = tf.nn.relu,
-            kernel_initializer = tf.random_normal_initializer(mean=0, stddev=0.3),
-            bias_initializer = tf.constant_initializer(0.1),
-        )
-        #output
-        acts = tf.layers.dense(
-            inputs = layer2,
-            units = self.n_actions,
-            activation = None,
-            kernel_initializer = tf.random_normal_initializer(mean=0, stddev=0.3),
-            bias_initializer = tf.constant_initializer(0.1),
-        )
+        # conv = tf.layers.conv2d(inputs, filters, kernel_size, strides, padding, activation)
+        # pool = tf.layers.max_pooling2d(inputs, pool_size, strides)
+        conv1 = tf.layers.conv2d(self.tf_s, 32, 5, 1, 'same', activation=tf.nn.relu) # -> 80, 80, 32
+        pool1 = tf.layers.max_pooling2d(conv1, 2, 2) # -> 40, 40, 32 
+        conv2 = tf.layers.conv2d(pool1, 64, 5, 1, activation=tf.nn.relu) # -> 36, 36, 64
+        pool2 = tf.layers.max_pooling2d(conv2, 2, 2) # -> 18, 18, 64 
+        conv3 = tf.layers.conv2d(pool2, 64, 5, 1, activation=tf.nn.relu) # -> 14, 14, 64
+        pool3 = tf.layers.max_pooling2d(conv3, 2, 2) # -> 7, 7, 64 
+        flat = tf.reshape(pool3, [-1, 7*7*64])
+        fc1 = tf.layers.dense(flat, 256, tf.nn.relu)
+        acts = tf.layers.dense(fc1, 10)
 
         self.acts_prob = tf.nn.softmax(acts)
         neg_log_prob = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=acts, labels=self.tf_a)
@@ -69,16 +54,18 @@ class Agent_PG(Agent):
         # YOUR CODE HERE #
         ##################
         pass
-
+    
+    def _preprocess(I):
+        I = I[34:194]
+        I = I[::2, ::2, 0] # 80x80
+        I[I == 144] = 0
+        I[I == 109] = 0
+        I[I != 0] = 1
+        return I.astype(np.float).ravel()
 
     def train(self):
-        """
-        Implement your training algorithm here
-        """
-        ##################
-        # YOUR CODE HERE #
-        ##################
-        pass
+        episodes = 20000
+
 
 
     def make_action(self, observation, test=True):

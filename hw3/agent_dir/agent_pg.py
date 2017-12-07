@@ -2,7 +2,7 @@ from agent_dir.agent import Agent
 import scipy.misc
 import numpy as np
 import tensorflow as tf
-from keras.models import Sequential
+from keras.models import Sequential, load_model
 from keras.layers import *
 from keras.optimizers import Adam
 from keras import backend as K

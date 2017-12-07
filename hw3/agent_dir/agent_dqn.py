@@ -49,9 +49,9 @@ class Agent_DQN(Agent):
         self.mask_target = tf.placeholder(tf.float32, [None, self.action_size])
         
         with tf.variable_scope('online'):
-            self.online_net = self.build_net(self.s, ['online_parameter', tf.GraphKeys.GLOBAL_VARIABLES])
+            self.online_net = self.build_net(self.s, 'online')
         with tf.variable_scope('target'):
-            self.target_net = self.build_net(self.s_, ['target_parameter', tf.GraphKeys.GLOBAL_VARIABLES])
+            self.target_net = self.build_net(self.s_, 'target')
 
         self.loss = tf.reduce_mean(tf.squared_difference(self.mask_target, self.online_net))
         self.train_op = tf.train.RMSPropOptimizer(self.lr).minimize(self.loss)
@@ -60,17 +60,18 @@ class Agent_DQN(Agent):
         target_parameter = tf.get_collection('target_parameter')
         self.update_target_op = [tf.assign(t, o) for t, o in zip(target_parameter, online_parameter)]
 
-    def build_net(self, inputs, collection_name):
+    def build_net(self, inputs, scope):
         # online network
-        conv1 = layers.convolution2d(inputs, num_outputs=32, kernel_size=8, stride=4, activation_fn=tf.nn.relu, variables_collections = collection_name)
-        conv2 = layers.convolution2d(conv1, num_outputs=64, kernel_size=4, stride=2, activation_fn=tf.nn.relu, variables_collections = collection_name)
-        conv3 = layers.convolution2d(conv2, num_outputs=64, kernel_size=3, stride=1, activation_fn=tf.nn.relu, variables_collections = collection_name)
-        conv_out = layers.flatten(conv3)
-        fc = layers.fully_connected(conv_out, num_outputs=512, activation_fn=None, variables_collections = collection_name)
-
-        LeakyReLU = tf.contrib.keras.layers.LeakyReLU(alpha=0.3)
-        fc_out = LeakyReLU(fc)
-        output = layers.fully_connected(fc_out, num_outputs=self.action_size, activation_fn=None, variables_collections = collection_name)
+        with tf.variable_scope(scope):
+            collection_name = [scope+'_parameter', tf.GraphKeys.GLOBAL_VARIABLES]
+            conv1 = layers.convolution2d(inputs, num_outputs=32, kernel_size=8, stride=4, activation_fn=tf.nn.relu, variables_collections = collection_name)
+            conv2 = layers.convolution2d(conv1, num_outputs=64, kernel_size=4, stride=2, activation_fn=tf.nn.relu, variables_collections = collection_name)
+            conv3 = layers.convolution2d(conv2, num_outputs=64, kernel_size=3, stride=1, activation_fn=tf.nn.relu, variables_collections = collection_name)
+            conv_out = layers.flatten(conv3)
+            fc = layers.fully_connected(conv_out, num_outputs=512, activation_fn=None, variables_collections = collection_name)
+            LeakyReLU = tf.contrib.keras.layers.LeakyReLU(alpha=0.3)
+            fc_out = LeakyReLU(fc)
+            output = layers.fully_connected(fc_out, num_outputs=self.action_size, activation_fn=None, variables_collections = collection_name)
         return output
 
     def init_game_setting(self):

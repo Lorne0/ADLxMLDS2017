@@ -20,17 +20,17 @@ class Agent_PG(Agent):
         #self.n_features = 6400
         self.env = env
         self.n_actions = 6
-        self.lr = 1e-4
+        self.lr = 3e-4
         self.gamma = 0.99
         self.prev_obs = None
         self._build_net()
 
-        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.6)
+        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.7)
         config = tf.ConfigProto(gpu_options = gpu_options, allow_soft_placement = True)
         self.sess = tf.Session(config=config)
         self.sess.run(tf.global_variables_initializer())
         
-        tf.train.Saver().restore(self.sess, "./model/pg_model")
+        #tf.train.Saver().restore(self.sess, "./model/pg_model")
 
     def _build_net(self):
         self.tf_s = tf.placeholder(tf.float32, [None, 80, 80, 1])
@@ -111,22 +111,22 @@ class Agent_PG(Agent):
                 obs = obs_
             
             if (e+1)%10 == 0:
-                save_path = saver.save(self.sess, "./model/pg_model")
-                np.save("./result/pg.npy", result)
+                save_path = saver.save(self.sess, "./model/pg_model2")
+                np.save("./result/pg2.npy", result)
                 
             rr = np.mean(result[-30:])
             print("Last 30 average reward: %f" %(rr))
 
         self.env.close()
-        save_path = saver.save(self.sess, "./model/pg_model")
-        np.save("./result/pg.npy", result)
+        save_path = saver.save(self.sess, "./model/pg_model2")
+        np.save("./result/pg2.npy", result)
                 
     def make_action(self, observation, test=True):
         if test==False:
             prob = self.sess.run(self.acts_prob, feed_dict={self.tf_s:np.expand_dims(observation,axis=0)})
             return np.random.choice(range(prob.shape[1]), p=prob.ravel())
         else:
-            cur_obs = preprocess(observation)
+            cur_obs = self.preprocess(observation)
             s = cur_obs - self.prev_obs if self.prev_obs is not None else np.zeros((80,80,1))
             self.prev_obs = cur_obs
             prob = self.sess.run(self.acts_prob, feed_dict={self.tf_s:np.expand_dims(s,axis=0)})

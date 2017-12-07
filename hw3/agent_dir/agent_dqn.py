@@ -88,7 +88,7 @@ class Agent_DQN(Agent):
             for i in range(len(actions)):
                 if actions[i]==vmax:
                     a.append(i)
-                return random.choice(a)
+            return random.choice(a)
 
     def memory_store(self, m):
         self.Memory[self.memory_count % self.memory_limit] = m

@@ -48,10 +48,8 @@ class Agent_DQN(Agent):
         self.s_ = tf.placeholder(tf.float32, [None, 84, 84, 4])
         self.mask_target = tf.placeholder(tf.float32, [None, self.action_size])
         
-        with tf.variable_scope('online'):
-            self.online_net = self.build_net(self.s, 'online')
-        with tf.variable_scope('target'):
-            self.target_net = self.build_net(self.s_, 'target')
+        self.online_net = self.build_net(self.s, 'online')
+        self.target_net = self.build_net(self.s_, 'target')
 
         self.loss = tf.reduce_mean(tf.squared_difference(self.mask_target, self.online_net))
         self.train_op = tf.train.RMSPropOptimizer(self.lr).minimize(self.loss)
@@ -114,12 +112,10 @@ class Agent_DQN(Agent):
         mask_target = online_net.copy()
         mask_target[np.arange(self.batch_size), actions] = rewards + self.gamma * np.max(target_net, axis=1)
         _, cost = self.sess.run([self.train_op, self.loss], feed_dict={self.s: s, self.mask_target: mask_target}) 
-        if self.exploration_rate >= 0.05:
-            self.exploration_rate -= self.exploration_delta
 
     def train(self):
         saver = tf.train.Saver()
-        episodes = 1000000
+        episodes = 10000000
         result = [] #result for each episode
         for e in range(1, episodes+1):
             obs = self.env.reset()
@@ -135,6 +131,9 @@ class Agent_DQN(Agent):
                 self.timestep += 1
                 if self.timestep > self.memory_limit and (self.timestep%self.online_update_frequency)==0:
                     self.learn()
+
+                if self.exploration_rate >= 0.05:
+                    self.exploration_rate -= self.exploration_delta
 
                 obs = obs_
 

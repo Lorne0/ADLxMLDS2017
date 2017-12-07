@@ -3,7 +3,12 @@ import numpy as np
 from keras.models import Sequential
 from keras.layers import *
 from keras.optimizers import Adam
-
+from keras import backend as K
+import tensorflow as tf
+def get_session(gpu_fraction=0.2):
+    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_fraction)
+    return tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
+K.set_session(get_session())
 
 class PGAgent:
     def __init__(self, state_size, action_size):
@@ -91,7 +96,7 @@ if __name__ == "__main__":
     state_size = 80 * 80
     action_size = env.action_space.n
     agent = PGAgent(state_size, action_size)
-    #agent.load('./save_model/pong_reinforce.h5')
+    agent.load('./model/pong_reinforce.h5')
     result = []
     while True:
         #env.render()

@@ -2,6 +2,14 @@ from agent_dir.agent import Agent
 import scipy.misc
 import numpy as np
 import tensorflow as tf
+from keras.models import Sequential
+from keras.layers import *
+from keras.optimizers import Adam
+from keras import backend as K
+def get_session(gpu_fraction=0.6):
+    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_fraction)
+    return tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
+K.set_session(get_session())
 
 class Agent_PG(Agent):
     def __init__(self, env, args):
@@ -17,133 +25,122 @@ class Agent_PG(Agent):
             print('loading trained model')
 
         ##################
-        #self.n_features = 6400
         self.env = env
+        self.n_features = 80*80
         self.n_actions = 6
-        self.lr = 3e-4
+        self.lr = 0.001
         self.gamma = 0.99
-        self.prev_obs = None
-        self._build_net()
+        self.states = []
+        self.gradients = []
+        self.rewards = []
+        self.probs = []
+        self.prev_x = None
 
-        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.7)
-        config = tf.ConfigProto(gpu_options = gpu_options, allow_soft_placement = True)
-        self.sess = tf.Session(config=config)
-        self.sess.run(tf.global_variables_initializer())
-        
-        #tf.train.Saver().restore(self.sess, "./model/pg_model")
+        self.model = self._build_model()
+        self.result = []
+        self.start_episode = 0
+        # self.model = load_model('./model/pg_keras_model.h5')
+        # self.result = np.load('./result/pg_keras_result.npy')
+        # self.start_episode = 0
 
-    def _build_net(self):
-        self.tf_s = tf.placeholder(tf.float32, [None, 80, 80, 1])
-        self.tf_a = tf.placeholder(tf.int32, [None, ])
-        self.tf_vt = tf.placeholder(tf.float32, [None, ])
-
-        # conv = tf.layers.conv2d(inputs, filters, kernel_size, strides, padding, activation)
-        # pool = tf.layers.max_pooling2d(inputs, pool_size, strides)
-        # input 80*80
-        conv1 = tf.layers.conv2d(self.tf_s, 16, 5, 2, activation=tf.nn.relu) # -> 38, 38, 16
-        pool1 = tf.layers.max_pooling2d(conv1, 2, 2) # -> 19, 19, 16 
-        conv2 = tf.layers.conv2d(pool1, 32, 4, 1, activation=tf.nn.relu) # -> 16, 16, 32
-        pool2 = tf.layers.max_pooling2d(conv2, 2, 2) # -> 8, 8, 32 
-        flat = tf.reshape(pool2, [-1, 8*8*32])
-        #fc1 = tf.layers.dense(flat, 256, tf.nn.relu)
-        acts = tf.layers.dense(flat, self.n_actions)
-
-        self.acts_prob = tf.nn.softmax(acts)
-        neg_log_prob = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=acts, labels=self.tf_a)
-        #loss = tf.reduce_mean(neg_log_prob * self.tf_vt)
-        loss = tf.reduce_sum(neg_log_prob * self.tf_vt)
-        self.train_op = tf.train.AdamOptimizer(self.lr).minimize(loss)
-
+    def _build_model(self):
+        model = Sequential()
+        model.add(Reshape((80, 80, 1), input_shape=(self.n_features,)))
+        model.add(Conv2D(filters=32, kernel_size=(6,6), strides=(3,3), padding='same', activation='relu', kernel_initializer='he_uniform'))
+        model.add(Flatten())
+        model.add(Dense(64, activation='relu', kernel_initializer='he_uniform'))
+        model.add(Dense(32, activation='relu', kernel_initializer='he_uniform'))
+        model.add(Dense(self.n_actions, activation='softmax'))
+        opt = Adam(lr=self.lr)
+        model.compile(loss='categorical_crossentropy', optimizer=opt)
+        return model
 
     def init_game_setting(self):
-        """
-        Testing function will call this function at the begining of new game
-        Put anything you want to initialize if necessary
-        """
-        ##################
-        # YOUR CODE HERE #
-        ##################
-        self.prev_obs = None
+        self.prev_x = None
     
-    def preprocess(self, a):
-        b = 0.2126 * a[:, :, 0] + 0.7152 * a[:, :, 1] + 0.0722 * a[:, :, 2]
-        b = b.astype(np.uint8)
-        resized = scipy.misc.imresize(b, [80,80])
-        return np.expand_dims(resized.astype(np.float32),axis=2)
-        '''
+    def preprocess(self, I):
         I = I[34:194]
         I = I[::2, ::2, 0] # 80x80
         I[I == 144] = 0
         I[I == 109] = 0
         I[I != 0] = 1
         return I.astype(np.float).ravel()
-        '''
+        
+    def remember(self, state, action, prob, reward):
+        y = np.zeros(self.n_actions)
+        y[action] = 1
+        self.gradients.append(np.array(y).astype('float32') - prob)
+        self.states.append(state)
+        self.rewards.append(reward)
+
+    def make_action(self, observation, test=True):
+        if test == True:
+            cur_x = self.preprocess(observation)
+            observation = cur_x - self.prev_x if self.prev_x is not None else np.zeros(state_size)
+            self.prev_x = cur_x
+
+        observation = observation.reshape([1, observation.shape[0]])
+        aprob = self.model.predict(observation, batch_size=1).flatten()
+        self.probs.append(aprob)
+        prob = aprob / np.sum(aprob)
+        action = np.random.choice(self.n_actions, 1, p=prob)[0]
+        return action, prob
+
+    def discount_rewards(self, rewards):
+        discounted_rewards = np.zeros_like(rewards)
+        running_add = 0
+        for t in reversed(range(0, len(rewards))):
+            #if rewards[t] != 0:
+            #    running_add = 0
+            running_add = running_add * self.gamma + rewards[t]
+            discounted_rewards[t] = running_add
+        discounted_rewards -= np.mean(discounted_rewards)
+        discounted_rewards /= np.std(discounted_rewards)
+        return discounted_rewards
+
+    def learn(self):
+        gradients = np.vstack(self.gradients)
+        rewards = np.array(self.rewards)
+        #rewards = np.vstack(self.rewards)
+        rewards = self.discount_rewards(rewards)
+        rewards = np.reshape(rewards, (-1, 1))
+        gradients *= rewards
+        #X = np.squeeze(np.vstack([self.states]))
+        X = np.array(self.states)
+        Y = self.probs + self.lr * np.squeeze(np.vstack([gradients]))
+        self.model.train_on_batch(X, Y)
+        self.states, self.probs, self.gradients, self.rewards = [], [], [], []
 
     def train(self):
-        saver = tf.train.Saver()
-        result = []
+        n_features = 80*80
+        n_actions = 6
         episodes = 20000
-        for e in range(episodes):
-            print("%d/%d" %(e+1, episodes))
-            obs = self.env.reset()
-            episode_reward = 0
-            ss, aa, rr = [], [], []
-            self.prev_obs = None
+        se = self.start_episode
+        for episode in range(se, episodes+1):
+            state = self.env.reset()
+            score = 0
+            self.prev_x = None
             while True:
 
-                cur_obs = self.preprocess(obs)
-                s = cur_obs - self.prev_obs if self.prev_obs is not None else np.zeros((80,80,1))
-                self.prev_obs = cur_obs
-                    
-                a = self.make_action(s, test=False)
-                obs_, r, done, info = self.env.step(a)
-                episode_reward += r
+                cur_x = self.preprocess(state)
+                x = cur_x - self.prev_x if self.prev_x is not None else np.zeros(n_features)
+                self.prev_x = cur_x
 
-                ss.append(s)
-                aa.append(a)
-                rr.append(r)
+                action, prob = self.make_action(x, test=False)
+                state, reward, done, info = self.env.step(action)
+                score += reward
+                self.remember(x, action, prob, reward)
 
                 if done:
-                    vt = self.learn(ss,aa,rr)
-                    result.append(episode_reward)
-                    print("Reward: ", episode_reward)
+                    self.learn()
+                    self.result.append(score)
+                    print('Episode: %d - Score: %d. - Last 30: %f' % (episode, score, np.mean(self.result[-30:])))
+                    score = 0
+                    if episode % 10 == 0:
+                        self.model.save('./model/pg_keras_model.h5')
+                        np.save('./result/pg_keras_result.npy',self.result)
                     break
-                obs = obs_
-            
-            if (e+1)%10 == 0:
-                save_path = saver.save(self.sess, "./model/pg_model2")
-                np.save("./result/pg2.npy", result)
                 
-            rr = np.mean(result[-30:])
-            print("Last 30 average reward: %f" %(rr))
-
         self.env.close()
-        save_path = saver.save(self.sess, "./model/pg_model2")
-        np.save("./result/pg2.npy", result)
                 
-    def make_action(self, observation, test=True):
-        if test==False:
-            prob = self.sess.run(self.acts_prob, feed_dict={self.tf_s:np.expand_dims(observation,axis=0)})
-            return np.random.choice(range(prob.shape[1]), p=prob.ravel())
-        else:
-            cur_obs = self.preprocess(observation)
-            s = cur_obs - self.prev_obs if self.prev_obs is not None else np.zeros((80,80,1))
-            self.prev_obs = cur_obs
-            prob = self.sess.run(self.acts_prob, feed_dict={self.tf_s:np.expand_dims(s,axis=0)})
-            return np.random.choice(range(prob.shape[1]), p=prob.ravel())
     
-    def discounted_reward(self, r):
-        dr = np.zeros_like(r)
-        a = 0
-        for t in reversed(range(len(r))):
-            a = a * self.gamma + r[t]
-            dr[t] = a
-        dr -= np.mean(dr)
-        dr /= np.std(dr)
-        return dr
-
-    def learn(self, ss, aa, rr):
-        dr = self.discounted_reward(rr)
-        self.sess.run(self.train_op, feed_dict={self.tf_s:np.array(ss), self.tf_a:np.array(aa), self.tf_vt:dr})
-        return dr
-

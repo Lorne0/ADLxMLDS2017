@@ -143,7 +143,7 @@ class Agent_DQN(Agent):
                     break
 
             rr = np.mean(result[-100:])
-            print("Episode: %d | Reward: %d | Last 100: %f" %(e, episode_reward, rr))
+            print("Episode: %d | Reward: %d | Last 100: %f | timestep: %d" %(e, episode_reward, rr, self.timestep))
             if (e%10) == 0:
                 np.save('./result/dqn_result.npy',result)
                 save_path = saver.save(self.sess, "./model/dqn_model")

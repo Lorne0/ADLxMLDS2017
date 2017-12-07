@@ -1,9 +1,8 @@
 import gym
 import numpy as np
 from keras.models import Sequential
-from keras.layers import Dense, Reshape, Flatten
+from keras.layers import *
 from keras.optimizers import Adam
-from keras.layers.convolutional import Convolution2D
 
 
 class PGAgent:
@@ -21,12 +20,11 @@ class PGAgent:
 
     def _build_model(self):
         model = Sequential()
-        model.add(Reshape((1, 80, 80), input_shape=(self.state_size,)))
-        model.add(Convolution2D(32, 6, 6, subsample=(3, 3), border_mode='same',
-                                activation='relu', init='he_uniform'))
+        model.add(Reshape((80, 80, 1), input_shape=(self.state_size,)))
+        model.add(Conv2D(filters=32, kernel_size=(6,6), strides=(3,3), padding='same', activation='relu', kernel_initializer='he_uniform'))
         model.add(Flatten())
-        model.add(Dense(64, activation='relu', init='he_uniform'))
-        model.add(Dense(32, activation='relu', init='he_uniform'))
+        model.add(Dense(64, activation='relu', kernel_initializer='he_uniform'))
+        model.add(Dense(32, activation='relu', kernel_initializer='he_uniform'))
         model.add(Dense(self.action_size, activation='softmax'))
         opt = Adam(lr=self.learning_rate)
         # See note regarding crossentropy in cartpole_reinforce.py
@@ -94,6 +92,7 @@ if __name__ == "__main__":
     action_size = env.action_space.n
     agent = PGAgent(state_size, action_size)
     #agent.load('./save_model/pong_reinforce.h5')
+    result = []
     while True:
         #env.render()
 
@@ -109,7 +108,8 @@ if __name__ == "__main__":
         if done:
             episode += 1
             agent.train()
-            print('Episode: %d - Score: %f.' % (episode, score))
+            result.append(score)
+            print('Episode: %d - Score: %f. - Last 30: %f' % (episode, score, np.mean(result[-30:])))
             score = 0
             state = env.reset()
             prev_x = None

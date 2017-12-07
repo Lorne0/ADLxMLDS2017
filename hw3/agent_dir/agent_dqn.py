@@ -43,22 +43,21 @@ class Agent_DQN(Agent):
 
         #tf.train.Saver().restore(self.sess, "./model/dqn_model")
 
-    def leaky_relu(x, alpha=0.3):
-        return tf.nn.relu(x) - alpha * tf.nn.relu(-x)
-
     def build_model(self):
         self.s = tf.placeholder(tf.float32, [None, 84, 84, 4])
         self.s_ = tf.placeholder(tf.float32, [None, 84, 84, 4])
         self.mask_target = tf.placeholder(tf.float32, [None, self.action_size])
-
-        self.online_net = self.build_net(self.s, "online")
-        self.target_net = self.build_net(self.s_, "target")
+        
+        with tf.variable_scope('online'):
+            self.online_net = self.build_net(self.s, ['online_parameter', tf.GraphKeys.GLOBAL_VARIABLES])
+        with tf.variable_scope('target'):
+            self.target_net = self.build_net(self.s_, ['target_parameter', tf.GraphKeys.GLOBAL_VARIABLES])
 
         self.loss = tf.reduce_mean(tf.squared_difference(self.mask_target, self.online_net))
         self.train_op = tf.train.RMSPropOptimizer(self.lr).minimize(self.loss)
 
-        online_parameter = tf.get_collection('online')
-        target_parameter = tf.get_collection('target')
+        online_parameter = tf.get_collection('online_parameter')
+        target_parameter = tf.get_collection('target_parameter')
         self.update_target_op = [tf.assign(t, o) for t, o in zip(target_parameter, online_parameter)]
 
     def build_net(self, inputs, collection_name):

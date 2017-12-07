@@ -84,6 +84,7 @@ class Agent_DQN(Agent):
         else:
             actions = self.sess.run(self.online_net, feed_dict={self.s: np.expand_dims(observation, axis=0)})[0]
             vmax = max(actions)
+            a = []
             for i in range(len(actions)):
                 if actions[i]==vmax:
                     a.append(i)

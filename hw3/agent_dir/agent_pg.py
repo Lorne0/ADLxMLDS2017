@@ -4,6 +4,7 @@ import numpy as np
 import tensorflow as tf
 from keras.models import Sequential
 from keras.layers import *
+from keras.models import load_model
 from keras.optimizers import Adam
 from keras import backend as K
 def get_session(gpu_fraction=0.6):
@@ -36,12 +37,12 @@ class Agent_PG(Agent):
         self.probs = []
         self.prev_x = None
 
-        self.model = self._build_model()
-        self.result = []
+        #self.model = self._build_model()
+        #self.result = []
+        #self.start_episode = 0
+        self.model = load_model('./model/pg_keras_model.h5')
+        self.result = np.load('./result/pg_keras_result.npy')
         self.start_episode = 0
-        # self.model = load_model('./model/pg_keras_model.h5')
-        # self.result = np.load('./result/pg_keras_result.npy')
-        # self.start_episode = 0
 
     def _build_model(self):
         model = Sequential()
@@ -76,7 +77,7 @@ class Agent_PG(Agent):
     def make_action(self, observation, test=True):
         if test == True:
             cur_x = self.preprocess(observation)
-            observation = cur_x - self.prev_x if self.prev_x is not None else np.zeros(state_size)
+            observation = cur_x - self.prev_x if self.prev_x is not None else np.zeros(self.n_features)
             self.prev_x = cur_x
 
         observation = observation.reshape([1, observation.shape[0]])
@@ -84,7 +85,10 @@ class Agent_PG(Agent):
         self.probs.append(aprob)
         prob = aprob / np.sum(aprob)
         action = np.random.choice(self.n_actions, 1, p=prob)[0]
-        return action, prob
+        if test == True:
+            return action
+        else:
+            return action, prob
 
     def discount_rewards(self, rewards):
         discounted_rewards = np.zeros_like(rewards)

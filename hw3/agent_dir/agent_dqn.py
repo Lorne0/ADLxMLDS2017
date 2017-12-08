@@ -17,6 +17,7 @@ class Agent_DQN(Agent):
         if args.test_dqn:
             #you can load your model here
             print('loading trained model')
+            #tf.train.Saver().restore(self.sess, "./model/dqn_model")
 
         self.env = env
         self.state_size = (84, 84, 4)
@@ -61,15 +62,16 @@ class Agent_DQN(Agent):
     def build_net(self, inputs, scope):
         # online network
         with tf.variable_scope(scope):
+            initializer = tf.contrib.keras.initializers.he_uniform()
             collection_name = [scope+'_parameter', tf.GraphKeys.GLOBAL_VARIABLES]
-            conv1 = layers.convolution2d(inputs, num_outputs=32, kernel_size=8, stride=4, activation_fn=tf.nn.relu, variables_collections = collection_name)
-            conv2 = layers.convolution2d(conv1, num_outputs=64, kernel_size=4, stride=2, activation_fn=tf.nn.relu, variables_collections = collection_name)
-            conv3 = layers.convolution2d(conv2, num_outputs=64, kernel_size=3, stride=1, activation_fn=tf.nn.relu, variables_collections = collection_name)
+            conv1 = layers.convolution2d(inputs, num_outputs=32, kernel_size=8, stride=4, activation_fn=tf.nn.relu, weights_initializer=initializer, variables_collections = collection_name)
+            conv2 = layers.convolution2d(conv1, num_outputs=64, kernel_size=4, stride=2, activation_fn=tf.nn.relu, weights_initializer=initializer, variables_collections = collection_name)
+            conv3 = layers.convolution2d(conv2, num_outputs=64, kernel_size=3, stride=1, activation_fn=tf.nn.relu, weights_initializer=initializer, variables_collections = collection_name)
             conv_out = layers.flatten(conv3)
-            fc = layers.fully_connected(conv_out, num_outputs=512, activation_fn=None, variables_collections = collection_name)
+            fc = layers.fully_connected(conv_out, num_outputs=512, activation_fn=None, weights_initializer=initializer, variables_collections = collection_name)
             LeakyReLU = tf.contrib.keras.layers.LeakyReLU(alpha=0.3)
             fc_out = LeakyReLU(fc)
-            output = layers.fully_connected(fc_out, num_outputs=self.action_size, activation_fn=None, variables_collections = collection_name)
+            output = layers.fully_connected(fc_out, num_outputs=self.action_size, activation_fn=None, weights_initializer=initializer, variables_collections = collection_name)
         return output
 
     def init_game_setting(self):
@@ -144,8 +146,8 @@ class Agent_DQN(Agent):
             rr = np.mean(result[-100:])
             print("Episode: %d | Reward: %d | Last 100: %f | timestep: %d" %(e, episode_reward, rr, self.timestep))
             if (e%10) == 0:
-                np.save('./result/dqn_result.npy',result)
-                save_path = saver.save(self.sess, "./model/dqn_model")
+                np.save('./result/dqn_result2.npy',result)
+                save_path = saver.save(self.sess, "./model/dqn_model2")
 
 
 

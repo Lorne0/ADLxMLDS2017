@@ -56,7 +56,7 @@ class Agent_DQN(Agent):
         '''
         
         if args.test_dqn:
-            self.online
+            self.online_model = load_model('./model/dqn_keras_online_model.h5')
             #tf.train.Saver().restore(self.sess, "./model/dqn_model_sum")
 
     def build_model(self):
@@ -65,8 +65,10 @@ class Agent_DQN(Agent):
         model.add(Conv2D(64, (4, 4), strides=(2, 2), activation='relu'))
         model.add(Conv2D(64, (3, 3), strides=(1, 1), activation='relu'))
         model.add(Flatten())
-        model.add(Dense(512, activation='relu'))
+        model.add(Dense(512, activation='linear'))
+        model.add(LeakyReLU())
         model.add(Dense(self.action_size))
+        model.compile(loss='mse', optimizer=RMSprop(lr=self.lr))
         return model
         '''
         self.s = tf.placeholder(tf.float32, [None, 84, 84, 4])

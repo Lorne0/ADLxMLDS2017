@@ -3,7 +3,15 @@ import random
 import scipy.misc
 import numpy as np
 import tensorflow as tf
-import tensorflow.contrib.layers as layers
+#import tensorflow.contrib.layers as layers
+from keras.models import *
+from keras.layers import *
+from keras.optimizers import *
+from keras import backend as K
+def get_session(gpu_fraction=0.1):
+    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_fraction)
+    return tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
+K.set_session(get_session())
 
 class Agent_DQN(Agent):
     def __init__(self, env, args):
@@ -24,7 +32,7 @@ class Agent_DQN(Agent):
         self.action_size = self.env.action_space.n
         self.exploration_rate = 1.0
         self.exploration_delta = 9.5*1e-7 # after 1000000, exploration_rate will be 0.05
-        self.lr = 3*1e-5
+        self.lr = 1e-4
         self.gamma = 0.99
         self.batch_size = 32
         self.timestep = 0
@@ -35,17 +43,32 @@ class Agent_DQN(Agent):
 
         self.online_update_frequency = 4
         self.target_update_frequency = 1000
-        self.build_model()
+        #self.build_model()
+        self.online_model = self.build_model()
+        self.target_model = self.build_model()
+        self.update_target_model()
 
+        '''
         gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1)
         config = tf.ConfigProto(gpu_options = gpu_options, allow_soft_placement = True)
         self.sess = tf.Session(config=config)
         self.sess.run(tf.global_variables_initializer())
+        '''
         
         if args.test_dqn:
-            tf.train.Saver().restore(self.sess, "./model/dqn_model_sum")
+            self.online
+            #tf.train.Saver().restore(self.sess, "./model/dqn_model_sum")
 
     def build_model(self):
+        model = Sequential()
+        model.add(Conv2D(32, (8, 8), strides=(4, 4), activation='relu', input_shape=self.state_size))
+        model.add(Conv2D(64, (4, 4), strides=(2, 2), activation='relu'))
+        model.add(Conv2D(64, (3, 3), strides=(1, 1), activation='relu'))
+        model.add(Flatten())
+        model.add(Dense(512, activation='relu'))
+        model.add(Dense(self.action_size))
+        return model
+        '''
         self.s = tf.placeholder(tf.float32, [None, 84, 84, 4])
         self.s_ = tf.placeholder(tf.float32, [None, 84, 84, 4])
         self.mask_target = tf.placeholder(tf.float32, [None, self.action_size])
@@ -61,7 +84,12 @@ class Agent_DQN(Agent):
         online_parameter = tf.get_collection('online_parameter')
         target_parameter = tf.get_collection('target_parameter')
         self.update_target_op = [tf.assign(t, o) for t, o in zip(target_parameter, online_parameter)]
+        '''
 
+    def update_target_model(self):
+        self.target_model.set_weights(self.online_model.get_weights())
+
+    '''
     def build_net(self, inputs, scope, collection_name):
         # online network
         with tf.variable_scope(scope):
@@ -76,12 +104,19 @@ class Agent_DQN(Agent):
             #fc_out = LeakyReLU(fc)
             output = layers.fully_connected(fc, num_outputs=self.action_size, activation_fn=None, weights_initializer=initializer, variables_collections = collection_name)
         return output
+    '''
 
     def init_game_setting(self):
         pass
 
     def make_action(self, observation, test=True):
         epsilon = 0.05 if test==True else self.exploration_rate
+        if np.random.rand() < epsilon:
+            return np.random.randint(0, self.action_size)
+        else:
+            q = self.online_model.predict(np.expand_dims(observation, axis=0))
+            return np.argmax(q[0])
+        '''
         if random.random() < epsilon: # random choose action:
             return np.random.randint(0, self.action_size)
         else:
@@ -92,6 +127,7 @@ class Agent_DQN(Agent):
                 if actions[i]==vmax:
                     a.append(i)
             return random.choice(a)
+        '''
 
     def memory_store(self, m):
         self.Memory[self.memory_count % self.memory_limit] = m
@@ -109,14 +145,22 @@ class Agent_DQN(Agent):
             rewards[i] = self.Memory[ids[i]][2]
             s_[i] = self.Memory[ids[i]][3]
         
+        q_online = self.online_model.predict(s)
+        q_target = self.target_model.predict(s_)
+        y = q_online.copy()
+        y[np.arange(self.batch_size), actions] = rewards + self.gamma * np.max(q_target, axis=1)
+        self.online_model.train_on_batch(s, y)
+
+        '''
         online_net, target_net = self.sess.run([self.online_net, self.target_net], 
                                                 feed_dict={self.s: s, self.s_: s_})
         mask_target = online_net.copy()
         mask_target[np.arange(self.batch_size), actions] = rewards + self.gamma * np.max(target_net, axis=1)
         _, cost = self.sess.run([self.train_op, self.loss], feed_dict={self.s: s, self.mask_target: mask_target}) 
+        '''
 
     def train(self):
-        saver = tf.train.Saver()
+        #saver = tf.train.Saver()
         episodes = 10000000
         result = [] #result for each episode
         for e in range(1, episodes+1):
@@ -131,12 +175,13 @@ class Agent_DQN(Agent):
                 self.timestep += 1
 
                 if self.timestep > self.memory_limit and (self.timestep%self.target_update_frequency)==0:
-                    self.sess.run(self.update_target_op)
+                    self.update_target_model()
+                    #self.sess.run(self.update_target_op)
 
                 if self.timestep > self.memory_limit and (self.timestep%self.online_update_frequency)==0:
                     self.learn()
 
-                if self.exploration_rate >= 0.05:
+                if self.exploration_rate > 0.05:
                     self.exploration_rate -= self.exploration_delta
 
                 obs = obs_
@@ -148,8 +193,10 @@ class Agent_DQN(Agent):
             rr = np.mean(result[-100:])
             print("Episode: %d | Reward: %d | Last 100: %f | timestep: %d | exploration: %f" %(e, episode_reward, rr, self.timestep, self.exploration_rate))
             if (e%10) == 0:
-                np.save('./result/dqn_result03.npy',result)
-                save_path = saver.save(self.sess, "./model/dqn_model03")
+                np.save('./result/dqn_keras_result.npy',result)
+                self.online_model.save('./model/dqn_keras_online_model.h5')
+                self.target_model.save('./model/dqn_keras_target_model.h5')
+                #save_path = saver.save(self.sess, "./model/dqn_model03")
 
 
 

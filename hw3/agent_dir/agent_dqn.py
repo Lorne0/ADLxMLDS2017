@@ -24,7 +24,7 @@ class Agent_DQN(Agent):
         self.action_size = self.env.action_space.n
         self.exploration_rate = 1.0
         self.exploration_delta = 9.5*1e-7 # after 1000000, exploration_rate will be 0.05
-        self.lr = 1e-3
+        self.lr = 1e-4
         self.gamma = 0.99
         self.batch_size = 32
         self.timestep = 0
@@ -74,7 +74,7 @@ class Agent_DQN(Agent):
             fc = layers.fully_connected(conv_out, num_outputs=512, activation_fn=None, weights_initializer=initializer, variables_collections = collection_name)
             LeakyReLU = tf.contrib.keras.layers.LeakyReLU(alpha=0.3)
             fc_out = LeakyReLU(fc)
-            output = layers.fully_connected(fc_out, num_outputs=self.action_size, activation_fn=None, weights_initializer=initializer, variables_collections = collection_name)
+            output = layers.fully_connected(fc_out, num_outputs=self.action_size, activation_fn=tf.nn.softmax, weights_initializer=initializer, variables_collections = collection_name)
         return output
 
     def init_game_setting(self):
@@ -148,8 +148,8 @@ class Agent_DQN(Agent):
             rr = np.mean(result[-100:])
             print("Episode: %d | Reward: %d | Last 100: %f | timestep: %d | exploration: %f" %(e, episode_reward, rr, self.timestep, self.exploration_rate))
             if (e%10) == 0:
-                np.save('./result/dqn_result_sum_10.npy',result)
-                save_path = saver.save(self.sess, "./model/dqn_model_sum_10")
+                np.save('./result/dqn_result_sum_softmax.npy',result)
+                save_path = saver.save(self.sess, "./model/dqn_model_sum_softmax")
 
 
 

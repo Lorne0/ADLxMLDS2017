@@ -55,7 +55,7 @@ class Agent_DQN(Agent):
         with tf.variable_scope('target'):
             self.target_net = self.build_net(self.s_, 'target', [tf.GraphKeys.GLOBAL_VARIABLES, 'target_parameter'])
 
-        self.loss = tf.reduce_sum(tf.squared_difference(self.mask_target, self.online_net))
+        self.loss = tf.reduce_mean(tf.squared_difference(self.mask_target, self.online_net))
         self.train_op = tf.train.RMSPropOptimizer(self.lr).minimize(self.loss)
 
         online_parameter = tf.get_collection('online_parameter')
@@ -148,8 +148,8 @@ class Agent_DQN(Agent):
             rr = np.mean(result[-100:])
             print("Episode: %d | Reward: %d | Last 100: %f | timestep: %d | exploration: %f" %(e, episode_reward, rr, self.timestep, self.exploration_rate))
             if (e%10) == 0:
-                np.save('./result/dqn_result_sum.npy',result)
-                save_path = saver.save(self.sess, "./model/dqn_model_sum")
+                np.save('./result/dqn_result.npy',result)
+                save_path = saver.save(self.sess, "./model/dqn_model")
 
 
 

@@ -24,7 +24,7 @@ class Agent_DQN(Agent):
         self.action_size = self.env.action_space.n
         self.exploration_rate = 1.0
         self.exploration_delta = 9.5*1e-7 # after 1000000, exploration_rate will be 0.05
-        self.lr = 1e-4
+        self.lr = 1e-3
         self.gamma = 0.99
         self.batch_size = 32
         self.timestep = 0
@@ -49,21 +49,23 @@ class Agent_DQN(Agent):
         self.s_ = tf.placeholder(tf.float32, [None, 84, 84, 4])
         self.mask_target = tf.placeholder(tf.float32, [None, self.action_size])
         
-        self.online_net = self.build_net(self.s, 'online')
-        self.target_net = self.build_net(self.s_, 'target')
+        with tf.variable_scope('online'):
+            self.online_net = self.build_net(self.s, 'online', [tf.GraphKeys.GLOBAL_VARIABLES, 'online_parameter'])
+        with tf.variable_scope('target'):
+            self.target_net = self.build_net(self.s_, 'target', [tf.GraphKeys.GLOBAL_VARIABLES, 'target_parameter'])
 
         self.loss = tf.reduce_mean(tf.squared_difference(self.mask_target, self.online_net))
         self.train_op = tf.train.RMSPropOptimizer(self.lr).minimize(self.loss)
 
-        online_parameter = tf.get_collection('online_parameter')
-        target_parameter = tf.get_collection('target_parameter')
+        online_parameter = tf.get_collection([tf.GraphKeys.GLOBAL_VARIABLES, 'online_parameter'])
+        target_parameter = tf.get_collection([tf.GraphKeys.GLOBAL_VARIABLES, 'target_parameter'])
         self.update_target_op = [tf.assign(t, o) for t, o in zip(target_parameter, online_parameter)]
 
-    def build_net(self, inputs, scope):
+    def build_net(self, inputs, scope, collection_name):
         # online network
         with tf.variable_scope(scope):
             initializer = tf.contrib.keras.initializers.he_uniform()
-            collection_name = [scope+'_parameter', tf.GraphKeys.GLOBAL_VARIABLES]
+            #collection_name = [scope+'_parameter', tf.GraphKeys.GLOBAL_VARIABLES]
             conv1 = layers.convolution2d(inputs, num_outputs=32, kernel_size=8, stride=4, activation_fn=tf.nn.relu, weights_initializer=initializer, variables_collections = collection_name)
             conv2 = layers.convolution2d(conv1, num_outputs=64, kernel_size=4, stride=2, activation_fn=tf.nn.relu, weights_initializer=initializer, variables_collections = collection_name)
             conv3 = layers.convolution2d(conv2, num_outputs=64, kernel_size=3, stride=1, activation_fn=tf.nn.relu, weights_initializer=initializer, variables_collections = collection_name)
@@ -95,9 +97,6 @@ class Agent_DQN(Agent):
         self.memory_count += 1
 
     def learn(self):
-        if (self.timestep%self.target_update_frequency)==0:
-            self.sess.run(self.update_target_op)
-
         ids = np.random.choice(min(self.memory_count, self.memory_limit), size=self.batch_size)
         s = np.zeros((self.batch_size, 84, 84, 4))
         actions = np.zeros(self.batch_size, dtype=np.int)
@@ -126,11 +125,13 @@ class Agent_DQN(Agent):
                 a = self.make_action(obs, test=False)
                 obs_, r, done, info = self.env.step(a)
                 episode_reward += r
-                obs = obs.astype(np.float32)
-                obs_ = obs_.astype(np.float32)
                 self.memory_store((obs, a, r, obs_))
 
                 self.timestep += 1
+
+                if self.timestep > self.memory_limit and (self.timestep%self.target_update_frequency)==0:
+                    self.sess.run(self.update_target_op)
+
                 if self.timestep > self.memory_limit and (self.timestep%self.online_update_frequency)==0:
                     self.learn()
 
@@ -144,10 +145,10 @@ class Agent_DQN(Agent):
                     break
 
             rr = np.mean(result[-100:])
-            print("Episode: %d | Reward: %d | Last 100: %f | timestep: %d" %(e, episode_reward, rr, self.timestep))
+            print("Episode: %d | Reward: %d | Last 100: %f | timestep: %d | exploration: %f" %(e, episode_reward, rr, self.timestep, self.exploration_rate))
             if (e%10) == 0:
-                np.save('./result/dqn_result2.npy',result)
-                save_path = saver.save(self.sess, "./model/dqn_model2")
+                np.save('./result/dqn_result3.npy',result)
+                save_path = saver.save(self.sess, "./model/dqn_model3")
 
 
 

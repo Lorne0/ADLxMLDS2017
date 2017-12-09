@@ -54,7 +54,7 @@ class Agent_DQN(Agent):
         with tf.variable_scope('target'):
             self.target_net = self.build_net(self.s_, 'target', [tf.GraphKeys.GLOBAL_VARIABLES, 'target_parameter'])
 
-        self.loss = tf.reduce_mean(tf.squared_difference(self.mask_target, self.online_net))
+        self.loss = tf.reduce_sum(tf.squared_difference(self.mask_target, self.online_net))
         self.train_op = tf.train.RMSPropOptimizer(self.lr).minimize(self.loss)
 
         online_parameter = tf.get_collection('online_parameter')

@@ -229,9 +229,9 @@ class Agent_DQN(Agent):
             rr = np.mean(result[-100:])
             print("Episode: %d | Reward: %d | Last 100: %f | timestep: %d | exploration: %f" %(e, episode_reward, rr, self.timestep, self.exploration_rate))
             if (e%10) == 0:
-                np.save('./result/dqn_keras_result2.npy',result)
-                self.online_model.save('./model/dqn_keras_online_model2.h5')
-                self.target_model.save('./model/dqn_keras_target_model2.h5')
+                np.save('./result/dqn_keras_result.npy',result)
+                self.online_model.save('./model/dqn_keras_online_model.h5')
+                self.target_model.save('./model/dqn_keras_target_model.h5')
                 #save_path = saver.save(self.sess, "./model/dqn_model03")
 
 

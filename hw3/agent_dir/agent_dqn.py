@@ -203,12 +203,14 @@ class Agent_DQN(Agent):
             obs = self.env.reset()
             episode_reward = 0
             max_q = 0
+            num_step = 0
             while True:
                 a = self.make_action(obs, test=False)
 
                 # add Max_Q value
                 q = self.online_model.predict(np.expand_dims(obs, axis=0))
                 max_q += np.max(q[0])
+                num_step += 1
 
                 obs_, r, done, info = self.env.step(a)
                 episode_reward += r
@@ -233,7 +235,7 @@ class Agent_DQN(Agent):
                     break
 
             rr = np.mean(result[-100:])
-            print("Episode: %d | Reward: %d | Last 100: %f | timestep: %d | exploration: %f | Max_Q: %f" %(e, episode_reward, rr, self.timestep, self.exploration_rate, max_q))
+            print("Episode: %d | Reward: %d | Last 100: %f | timestep: %d | exploration: %f | Max_Q: %f" %(e, episode_reward, rr, self.timestep, self.exploration_rate, max_q/num_step))
             if (e%10) == 0:
                 np.save('./result/dqn_keras_result_r.npy',result)
                 self.online_model.save('./model/dqn_keras_online_model_r.h5')

@@ -8,10 +8,11 @@ from keras.models import *
 from keras.layers import *
 from keras.optimizers import *
 from keras import backend as K
+'''
 def get_session(gpu_fraction=0.1):
     gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_fraction)
     return tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
-K.set_session(get_session())
+'''
 
 class Agent_DQN(Agent):
     def __init__(self, env, args):
@@ -47,7 +48,11 @@ class Agent_DQN(Agent):
         self.online_model = self.build_model()
         self.target_model = self.build_model()
         self.update_target_model()
-
+        self.optimizer = self.optimizer()
+        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1)
+        self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
+        K.set_session(self.sess)
+        self.sess.run(tf.global_variables_initializer())
         '''
         gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1)
         config = tf.ConfigProto(gpu_options = gpu_options, allow_soft_placement = True)
@@ -59,6 +64,21 @@ class Agent_DQN(Agent):
             self.online_model = load_model('./model/dqn_keras_online_model.h5')
             #tf.train.Saver().restore(self.sess, "./model/dqn_model_sum")
 
+    def optimizer(self):
+        a = K.placeholder(shape=(None,), dtype='int32')
+        y = K.placeholder(shape=(None,), dtype='float32')
+        py_x = self.online_model.output
+        a_one_hot = K.one_hot(a, self.action_size)
+        q_value = K.sum(py_x * a_one_hot, axis=1)
+        error = K.abs(y - q_value)
+        quadratic_part = K.clip(error, 0.0, 1.0)
+        linear_part = error - quadratic_part
+        loss = K.mean(0.5 * K.square(quadratic_part) + linear_part)
+        opt = RMSprop(lr=self.lr, epsilon=0.01)
+        updates = opt.get_updates(self.online_model.trainable_weights, [], loss)
+        train = K.function([self.online_model.input, a, y], [loss], updates=updates)
+        return train
+
     def build_model(self):
         model = Sequential()
         model.add(Conv2D(32, (8, 8), strides=(4, 4), activation='relu', input_shape=self.state_size, kernel_initializer='he_uniform'))
@@ -69,7 +89,7 @@ class Agent_DQN(Agent):
         #model.add(Dense(512, activation='linear'))
         #model.add(LeakyReLU())
         model.add(Dense(self.action_size, kernel_initializer='he_uniform'))
-        model.compile(loss='mse', optimizer=Adam(lr=self.lr))
+        #model.compile(loss='mse', optimizer=Adam(lr=self.lr))
         return model
         '''
         self.s = tf.placeholder(tf.float32, [None, 84, 84, 4])
@@ -148,11 +168,15 @@ class Agent_DQN(Agent):
             rewards[i] = self.Memory[ids[i]][2]
             s_[i] = self.Memory[ids[i]][3]
         
-        q_online = self.online_model.predict(s)
+        #q_online = self.online_model.predict(s)
+        #q_target = self.target_model.predict(s_)
+        #y = q_online.copy()
+        #y[np.arange(self.batch_size), actions] = rewards + self.gamma * np.max(q_target, axis=1)
+        #self.online_model.train_on_batch(s, y)
         q_target = self.target_model.predict(s_)
-        y = q_online.copy()
-        y[np.arange(self.batch_size), actions] = rewards + self.gamma * np.max(q_target, axis=1)
-        self.online_model.train_on_batch(s, y)
+        y = rewards + self.gamma * np.max(q_target, axis=1)
+        loss = self.optimizer([s, actions, y])
+
 
         '''
         online_net, target_net = self.sess.run([self.online_net, self.target_net], 
@@ -196,9 +220,9 @@ class Agent_DQN(Agent):
             rr = np.mean(result[-100:])
             print("Episode: %d | Reward: %d | Last 100: %f | timestep: %d | exploration: %f" %(e, episode_reward, rr, self.timestep, self.exploration_rate))
             if (e%10) == 0:
-                np.save('./result/dqn_keras_result2.npy',result)
-                self.online_model.save('./model/dqn_keras_online_model2.h5')
-                self.target_model.save('./model/dqn_keras_target_model2.h5')
+                np.save('./result/dqn_keras_result_K.npy',result)
+                self.online_model.save('./model/dqn_keras_online_model_K.h5')
+                self.target_model.save('./model/dqn_keras_target_model_K.h5')
                 #save_path = saver.save(self.sess, "./model/dqn_model03")
 
 

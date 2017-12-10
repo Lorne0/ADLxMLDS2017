@@ -9,12 +9,10 @@ from keras.layers import *
 from keras.optimizers import *
 from keras import backend as K
 
-'''
 def get_session(gpu_fraction=0.1):
     gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_fraction)
     return tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
 K.set_session(get_session())
-'''
 
 class Agent_DQN(Agent):
     def __init__(self, env, args):

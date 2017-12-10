@@ -61,7 +61,7 @@ class Agent_DQN(Agent):
 
     def build_model(self):
         model = Sequential()
-        model.add(Conv2D(32, (8, 8), strides=(4, 4), activation='relu', input_shape=self.state_size), kernel_initializer='he_uniform')
+        model.add(Conv2D(32, (8, 8), strides=(4, 4), activation='relu', input_shape=self.state_size, kernel_initializer='he_uniform'))
         model.add(Conv2D(64, (4, 4), strides=(2, 2), activation='relu', kernel_initializer='he_uniform'))
         model.add(Conv2D(64, (3, 3), strides=(1, 1), activation='relu', kernel_initializer='he_uniform'))
         model.add(Flatten())

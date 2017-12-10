@@ -181,7 +181,7 @@ class Agent_DQN(Agent):
         q_target = self.target_model.predict(s_)
         y = q_online.copy()
         y[np.arange(self.batch_size), actions] = rewards + self.gamma * np.max(q_target, axis=1)
-        self.online_model.train_on_batch(s, y)
+        loss = self.online_model.train_on_batch(s, y)
         #q_target = self.target_model.predict(s_)
         #y = rewards + self.gamma * np.max(q_target, axis=1)
         #loss = self.optimizer([s, actions, y])
@@ -204,6 +204,7 @@ class Agent_DQN(Agent):
             episode_reward = 0
             max_q = 0
             num_step = 0
+            total_loss = 0
             while True:
                 a = self.make_action(obs, test=False)
 
@@ -223,7 +224,8 @@ class Agent_DQN(Agent):
                     #self.sess.run(self.update_target_op)
 
                 if self.timestep > self.memory_limit and (self.timestep%self.online_update_frequency)==0:
-                    self.learn()
+                    loss = self.learn()
+                    total_loss += loss
 
                 if self.exploration_rate > 0.05:
                     self.exploration_rate -= self.exploration_delta

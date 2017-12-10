@@ -10,7 +10,7 @@ from keras.optimizers import *
 from keras import backend as K
 
 
-def get_session(gpu_fraction=0.1):
+def get_session(gpu_fraction=0.05):
     gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_fraction)
     return tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
 K.set_session(get_session())
@@ -202,8 +202,14 @@ class Agent_DQN(Agent):
         for e in range(1, episodes+1):
             obs = self.env.reset()
             episode_reward = 0
+            max_q = 0
             while True:
                 a = self.make_action(obs, test=False)
+
+                # add Max_Q value
+                q = self.online_model.predict(np.expand_dims(observation, axis=0))
+                max_q += np.max(q[0])
+
                 obs_, r, done, info = self.env.step(a)
                 episode_reward += r
                 self.memory_store((obs.copy(), a, r, obs_.copy()))
@@ -227,7 +233,7 @@ class Agent_DQN(Agent):
                     break
 
             rr = np.mean(result[-100:])
-            print("Episode: %d | Reward: %d | Last 100: %f | timestep: %d | exploration: %f" %(e, episode_reward, rr, self.timestep, self.exploration_rate))
+            print("Episode: %d | Reward: %d | Last 100: %f | timestep: %d | exploration: %f | Max_Q: %f" %(e, episode_reward, rr, self.timestep, self.exploration_rate, max_q))
             if (e%10) == 0:
                 np.save('./result/dqn_keras_result_r.npy',result)
                 self.online_model.save('./model/dqn_keras_online_model_r.h5')

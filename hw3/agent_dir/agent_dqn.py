@@ -182,6 +182,7 @@ class Agent_DQN(Agent):
         y = q_online.copy()
         y[np.arange(self.batch_size), actions] = rewards + self.gamma * np.max(q_target, axis=1)
         loss = self.online_model.train_on_batch(s, y)
+        return loss
         #q_target = self.target_model.predict(s_)
         #y = rewards + self.gamma * np.max(q_target, axis=1)
         #loss = self.optimizer([s, actions, y])
@@ -237,7 +238,7 @@ class Agent_DQN(Agent):
                     break
 
             rr = np.mean(result[-100:])
-            print("Episode: %d | Reward: %d | Last 100: %f | timestep: %d | exploration: %f | Max_Q: %f" %(e, episode_reward, rr, self.timestep, self.exploration_rate, max_q/num_step))
+            print("Episode: %d | Reward: %d | Last 100: %f | step: %d | explore: %f | Max_Q: %f | Loss: %f" %(e, episode_reward, rr, self.timestep, self.exploration_rate, max_q/num_step, total_loss/num_ste))
             if (e%10) == 0:
                 np.save('./result/dqn_keras_result_r.npy',result)
                 self.online_model.save('./model/dqn_keras_online_model_r.h5')

@@ -61,14 +61,15 @@ class Agent_DQN(Agent):
 
     def build_model(self):
         model = Sequential()
-        model.add(Conv2D(32, (8, 8), strides=(4, 4), activation='relu', input_shape=self.state_size))
-        model.add(Conv2D(64, (4, 4), strides=(2, 2), activation='relu'))
-        model.add(Conv2D(64, (3, 3), strides=(1, 1), activation='relu'))
+        model.add(Conv2D(32, (8, 8), strides=(4, 4), activation='relu', input_shape=self.state_size), kernel_initializer='he_uniform')
+        model.add(Conv2D(64, (4, 4), strides=(2, 2), activation='relu', kernel_initializer='he_uniform'))
+        model.add(Conv2D(64, (3, 3), strides=(1, 1), activation='relu', kernel_initializer='he_uniform'))
         model.add(Flatten())
-        model.add(Dense(512, activation='linear'))
-        model.add(LeakyReLU())
-        model.add(Dense(self.action_size))
-        model.compile(loss='mse', optimizer=RMSprop(lr=self.lr))
+        model.add(Dense(512, activation='relu', kernel_initializer='he_uniform'))
+        #model.add(Dense(512, activation='linear'))
+        #model.add(LeakyReLU())
+        model.add(Dense(self.action_size, kernel_initializer='he_uniform'))
+        model.compile(loss='mse', optimizer=Adam(lr=self.lr))
         return model
         '''
         self.s = tf.placeholder(tf.float32, [None, 84, 84, 4])
@@ -112,7 +113,7 @@ class Agent_DQN(Agent):
         pass
 
     def make_action(self, observation, test=True):
-        epsilon = 0.05 if test==True else self.exploration_rate
+        epsilon = 0.01 if test==True else self.exploration_rate
         if np.random.rand() < epsilon:
             return np.random.randint(0, self.action_size)
         else:
@@ -163,7 +164,7 @@ class Agent_DQN(Agent):
 
     def train(self):
         #saver = tf.train.Saver()
-        episodes = 10000000
+        episodes = 1000000
         result = [] #result for each episode
         for e in range(1, episodes+1):
             obs = self.env.reset()
@@ -172,7 +173,7 @@ class Agent_DQN(Agent):
                 a = self.make_action(obs, test=False)
                 obs_, r, done, info = self.env.step(a)
                 episode_reward += r
-                self.memory_store((obs, a, r, obs_))
+                self.memory_store((obs.copy(), a, r, obs_.copy()))
 
                 self.timestep += 1
 
@@ -186,7 +187,7 @@ class Agent_DQN(Agent):
                 if self.exploration_rate > 0.05:
                     self.exploration_rate -= self.exploration_delta
 
-                obs = obs_
+                obs = obs_.copy()
 
                 if done:
                     result.append(episode_reward)

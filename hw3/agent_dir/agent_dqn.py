@@ -238,7 +238,7 @@ class Agent_DQN(Agent):
                     break
 
             rr = np.mean(result[-100:])
-            print("Episode: %d | Reward: %d | Last 100: %f | step: %d | explore: %f | Max_Q: %f | Loss: %f" %(e, episode_reward, rr, self.timestep, self.exploration_rate, max_q/num_step, total_loss/num_ste))
+            print("Episode: %d | Reward: %d | Last 100: %f | step: %d | explore: %f | Max_Q: %f | Loss: %f" %(e, episode_reward, rr, self.timestep, self.exploration_rate, max_q/num_step, total_loss/num_step))
             if (e%10) == 0:
                 np.save('./result/dqn_keras_result_r.npy',result)
                 self.online_model.save('./model/dqn_keras_online_model_r.h5')

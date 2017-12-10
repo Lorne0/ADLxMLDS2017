@@ -27,6 +27,9 @@ class Agent_DQN(Agent):
             #you can load your model here
             print('loading trained model')
             self.online_model = load_model('./model/dqn_keras_online_model_K.h5')
+            self.env = env
+            self.action_size = self.env.action_space.n
+            self.exploration_rate = 1.0
             #tf.train.Saver().restore(self.sess, "./model/dqn_model")
         else:
             self.env = env

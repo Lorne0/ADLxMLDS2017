@@ -56,12 +56,12 @@ class Agent_DQN(Agent):
             self.target_model = self.build_model()
             self.update_target_model()
 
-            self.optimizer = self.optimizer()
-            gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1)
-            self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
-            K.set_session(self.sess)
+            #self.optimizer = self.optimizer()
+            #gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1)
+            #self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
+            #K.set_session(self.sess)
             #self.sess = tf.Session()
-            self.sess.run(tf.global_variables_initializer())
+            #self.sess.run(tf.global_variables_initializer())
 
             '''
             gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1)

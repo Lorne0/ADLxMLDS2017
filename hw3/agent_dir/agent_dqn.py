@@ -9,10 +9,12 @@ from keras.layers import *
 from keras.optimizers import *
 from keras import backend as K
 
+
 def get_session(gpu_fraction=0.1):
     gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_fraction)
     return tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
 K.set_session(get_session())
+
 
 class Agent_DQN(Agent):
     def __init__(self, env, args):
@@ -26,7 +28,7 @@ class Agent_DQN(Agent):
         if args.test_dqn:
             #you can load your model here
             print('loading trained model')
-            self.online_model = load_model('./model/dqn_keras_online_model_K.h5')
+            self.online_model = load_model('./model/dqn_keras_online_model.h5')
             self.env = env
             self.action_size = self.env.action_space.n
             self.exploration_rate = 1.0
@@ -36,7 +38,8 @@ class Agent_DQN(Agent):
             self.state_size = (84, 84, 4)
             self.action_size = self.env.action_space.n
             self.exploration_rate = 1.0
-            self.exploration_delta = 9.5*1e-7 # after 1000000, exploration_rate will be 0.05
+            #self.exploration_delta = 9.5*1e-7 # after 1000000, exploration_rate will be 0.05
+            self.exploration_delta = 6.33333*1e-7 # after 1500000, exploration_rate will be 0.05
             self.lr = 1e-4
             self.gamma = 0.99
             self.batch_size = 32
@@ -54,10 +57,10 @@ class Agent_DQN(Agent):
             self.update_target_model()
 
             self.optimizer = self.optimizer()
-            #gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1)
-            #self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
-            #K.set_session(self.sess)
-            self.sess = tf.Session()
+            gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1)
+            self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
+            K.set_session(self.sess)
+            #self.sess = tf.Session()
             self.sess.run(tf.global_variables_initializer())
 
             '''
@@ -68,7 +71,7 @@ class Agent_DQN(Agent):
             '''
             
             #tf.train.Saver().restore(self.sess, "./model/dqn_model_sum")
-
+    '''
     def optimizer(self):
         a = K.placeholder(shape=(None,), dtype='int32')
         y = K.placeholder(shape=(None,), dtype='float32')
@@ -83,6 +86,7 @@ class Agent_DQN(Agent):
         updates = opt.get_updates(self.online_model.trainable_weights, [], loss)
         train = K.function([self.online_model.input, a, y], [loss], updates=updates)
         return train
+    '''
 
     def build_model(self):
         model = Sequential()
@@ -94,7 +98,7 @@ class Agent_DQN(Agent):
         #model.add(Dense(512, activation='linear'))
         #model.add(LeakyReLU())
         model.add(Dense(self.action_size, kernel_initializer='he_uniform'))
-        #model.compile(loss='mse', optimizer=Adam(lr=self.lr))
+        model.compile(loss='mse', optimizer=Adam(lr=self.lr))
         return model
         '''
         self.s = tf.placeholder(tf.float32, [None, 84, 84, 4])
@@ -173,14 +177,14 @@ class Agent_DQN(Agent):
             rewards[i] = self.Memory[ids[i]][2]
             s_[i] = self.Memory[ids[i]][3]
         
-        #q_online = self.online_model.predict(s)
-        #q_target = self.target_model.predict(s_)
-        #y = q_online.copy()
-        #y[np.arange(self.batch_size), actions] = rewards + self.gamma * np.max(q_target, axis=1)
-        #self.online_model.train_on_batch(s, y)
+        q_online = self.online_model.predict(s)
         q_target = self.target_model.predict(s_)
-        y = rewards + self.gamma * np.max(q_target, axis=1)
-        loss = self.optimizer([s, actions, y])
+        y = q_online.copy()
+        y[np.arange(self.batch_size), actions] = rewards + self.gamma * np.max(q_target, axis=1)
+        self.online_model.train_on_batch(s, y)
+        #q_target = self.target_model.predict(s_)
+        #y = rewards + self.gamma * np.max(q_target, axis=1)
+        #loss = self.optimizer([s, actions, y])
 
 
         '''
@@ -225,9 +229,9 @@ class Agent_DQN(Agent):
             rr = np.mean(result[-100:])
             print("Episode: %d | Reward: %d | Last 100: %f | timestep: %d | exploration: %f" %(e, episode_reward, rr, self.timestep, self.exploration_rate))
             if (e%10) == 0:
-                np.save('./result/dqn_keras_result_K.npy',result)
-                self.online_model.save('./model/dqn_keras_online_model_K.h5')
-                self.target_model.save('./model/dqn_keras_target_model_K.h5')
+                np.save('./result/dqn_keras_result.npy',result)
+                self.online_model.save('./model/dqn_keras_online_model.h5')
+                self.target_model.save('./model/dqn_keras_target_model.h5')
                 #save_path = saver.save(self.sess, "./model/dqn_model03")
 
 

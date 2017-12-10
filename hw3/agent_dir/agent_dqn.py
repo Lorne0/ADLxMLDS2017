@@ -8,10 +8,12 @@ from keras.models import *
 from keras.layers import *
 from keras.optimizers import *
 from keras import backend as K
+
 '''
 def get_session(gpu_fraction=0.1):
     gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_fraction)
     return tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
+K.set_session(get_session())
 '''
 
 class Agent_DQN(Agent):
@@ -26,42 +28,43 @@ class Agent_DQN(Agent):
         if args.test_dqn:
             #you can load your model here
             print('loading trained model')
+            self.online_model = load_model('./model/dqn_keras_online_model_K.h5')
             #tf.train.Saver().restore(self.sess, "./model/dqn_model")
+        else:
+            self.env = env
+            self.state_size = (84, 84, 4)
+            self.action_size = self.env.action_space.n
+            self.exploration_rate = 1.0
+            self.exploration_delta = 9.5*1e-7 # after 1000000, exploration_rate will be 0.05
+            self.lr = 1e-4
+            self.gamma = 0.99
+            self.batch_size = 32
+            self.timestep = 0
 
-        self.env = env
-        self.state_size = (84, 84, 4)
-        self.action_size = self.env.action_space.n
-        self.exploration_rate = 1.0
-        self.exploration_delta = 9.5*1e-7 # after 1000000, exploration_rate will be 0.05
-        self.lr = 1e-4
-        self.gamma = 0.99
-        self.batch_size = 32
-        self.timestep = 0
+            self.Memory = {}
+            self.memory_limit = 10000
+            self.memory_count = 0
 
-        self.Memory = {}
-        self.memory_limit = 10000
-        self.memory_count = 0
+            self.online_update_frequency = 4
+            self.target_update_frequency = 1000
+            #self.build_model()
+            self.online_model = self.build_model()
+            self.target_model = self.build_model()
+            self.update_target_model()
 
-        self.online_update_frequency = 4
-        self.target_update_frequency = 1000
-        #self.build_model()
-        self.online_model = self.build_model()
-        self.target_model = self.build_model()
-        self.update_target_model()
-        self.optimizer = self.optimizer()
-        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1)
-        self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
-        K.set_session(self.sess)
-        self.sess.run(tf.global_variables_initializer())
-        '''
-        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1)
-        config = tf.ConfigProto(gpu_options = gpu_options, allow_soft_placement = True)
-        self.sess = tf.Session(config=config)
-        self.sess.run(tf.global_variables_initializer())
-        '''
-        
-        if args.test_dqn:
-            self.online_model = load_model('./model/dqn_keras_online_model.h5')
+            self.optimizer = self.optimizer()
+            gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1)
+            self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
+            K.set_session(self.sess)
+            self.sess.run(tf.global_variables_initializer())
+
+            '''
+            gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1)
+            config = tf.ConfigProto(gpu_options = gpu_options, allow_soft_placement = True)
+            self.sess = tf.Session(config=config)
+            self.sess.run(tf.global_variables_initializer())
+            '''
+            
             #tf.train.Saver().restore(self.sess, "./model/dqn_model_sum")
 
     def optimizer(self):

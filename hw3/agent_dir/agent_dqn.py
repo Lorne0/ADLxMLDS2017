@@ -207,7 +207,7 @@ class Agent_DQN(Agent):
                 a = self.make_action(obs, test=False)
 
                 # add Max_Q value
-                q = self.online_model.predict(np.expand_dims(observation, axis=0))
+                q = self.online_model.predict(np.expand_dims(obs, axis=0))
                 max_q += np.max(q[0])
 
                 obs_, r, done, info = self.env.step(a)

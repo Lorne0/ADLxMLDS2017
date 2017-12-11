@@ -38,6 +38,7 @@ class Agent_DQN(Agent):
             self.action_size = self.env.action_space.n
             self.exploration_rate = 1.0
             self.online_net = torch.load('./model/dqn_torch_online_model.pt')
+            self.online_net = self.online_net.cuda()
 
         else:
             self.env = env
@@ -107,8 +108,8 @@ class Agent_DQN(Agent):
         v_r = Variable(torch.FloatTensor(rewards)).cuda()
         v_s_ = Variable(torch.FloatTensor(s_)).cuda()
 
-        q_eval = self.online_net(v_s).gather(1, v_a.view(-1,1))
-        q_next = self.target_net(v_s_).detach()
+        q_eval = self.online_net(v_s).gather(1, v_a.view(-1,1)).cuda()
+        q_next = self.target_net(v_s_).detach().cuda()
         q_target = v_r.view(-1,1) + self.gamma * q_next.max(1)[0].view(self.batch_size, 1)
         q_target = q_target.cuda()
         loss = self.loss_func(q_eval, q_target)

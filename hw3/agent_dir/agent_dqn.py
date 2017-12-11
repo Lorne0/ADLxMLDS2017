@@ -19,7 +19,8 @@ class DQN(nn.Module):
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))
-        x = F.relu(self.fc4(x.view(x.size(0), -1)))
+        #x = F.relu(self.fc4(x.view(x.size(0), -1)))
+        x = F.leaky_relu(self.fc4(x.view(x.size(0), -1)))
         return self.fc5(x)
 
 class Agent_DQN(Agent):
@@ -65,7 +66,7 @@ class Agent_DQN(Agent):
 
     def update_target_model(self):
         self.target_net.load_state_dict(self.online_net.state_dict())
-        self.target_net.eval
+        #self.target_net.eval
 
     def init_game_setting(self):
         pass

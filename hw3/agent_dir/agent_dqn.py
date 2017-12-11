@@ -228,7 +228,7 @@ class Agent_DQN(Agent):
 
                 if self.timestep > self.memory_limit and (self.timestep%self.online_update_frequency)==0:
                     loss = self.learn()
-                    total_loss += loss
+                    #total_loss += loss
 
                 if self.exploration_rate > 0.05:
                     self.exploration_rate -= self.exploration_delta
@@ -240,7 +240,7 @@ class Agent_DQN(Agent):
                     break
 
             rr = np.mean(result[-30:])
-            print("Episode: %d | Reward: %d | Last 100: %f | step: %d | explore: %f | Max_Q: %f | Loss: %f" %(e, episode_reward, rr, self.timestep, self.exploration_rate, max_q/num_step, total_loss/num_step*1000))
+            print("Episode: %d | Reward: %d | Last 30: %f | step: %d | explore: %f | Max_Q: %f" %(e, episode_reward, rr, self.timestep, self.exploration_rate, max_q/num_step))
             if (e%10) == 0:
                 np.save('./result/dqn_keras_result_K.npy',result)
                 self.online_model.save('./model/dqn_keras_online_model_K.h5')

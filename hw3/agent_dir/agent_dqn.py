@@ -165,9 +165,9 @@ class Agent_DQN(Agent):
             #print("Episode: %d | Reward: %d | Last 30: %f | step: %d | explore: %f | Max_Q: %f" %(e, episode_reward, rr, self.timestep, self.exploration_rate, max_q/num_step))
             print("Episode: %d | Reward: %d | Last 30: %f | step: %d | explore: %f" %(e, episode_reward, rr, self.timestep, self.exploration_rate))
             if (e%10) == 0:
-                np.save('./result/dqn_torch_result.npy',result)
-                torch.save(self.online_net, './model/dqn_torch_online_model.pt')
-                torch.save(self.target_net, './model/dqn_torch_target_model.pt')
+                np.save('./result/dqn_torch_result2.npy',result)
+                torch.save(self.online_net, './model/dqn_torch_online_model2.pt')
+                torch.save(self.target_net, './model/dqn_torch_target_model2.pt')
 
 
 

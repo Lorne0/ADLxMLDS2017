@@ -1,20 +1,26 @@
 from agent_dir.agent import Agent
 import random
-import scipy.misc
 import numpy as np
-import tensorflow as tf
-#import tensorflow.contrib.layers as layers
-from keras.models import *
-from keras.layers import *
-from keras.optimizers import *
-from keras import backend as K
+import torch
+import torch.nn as nn
+from torch.autograd import Variable
+import torch.nn.functional as F
 
+class DQN(nn.Module):
+    def __init__(self, action_size):
+        super(DQN, self).__init__()
+        self.conv1 = nn.Conv2d(4, 32, kernel_size=8, stride=4)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2)
+        self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1)
+        self.fc4 = nn.Linear(7 * 7 * 64, 512)
+        self.fc5 = nn.Linear(512, action_size)
 
-def get_session(gpu_fraction=0.05):
-    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_fraction)
-    return tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
-K.set_session(get_session())
-
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
+        x = F.relu(self.fc4(x.view(x.size(0), -1)))
+        return self.fc5(x)
 
 class Agent_DQN(Agent):
     def __init__(self, env, args):
@@ -28,11 +34,10 @@ class Agent_DQN(Agent):
         if args.test_dqn:
             #you can load your model here
             print('loading trained model')
-            self.online_model = load_model('./model/dqn_keras_online_model.h5')
-            self.env = env
             self.action_size = self.env.action_space.n
             self.exploration_rate = 1.0
-            #tf.train.Saver().restore(self.sess, "./model/dqn_model")
+            self.online_net = torch.load('./model/dqn_torch_online_model.pt')
+
         else:
             self.env = env
             self.state_size = (84, 84, 4)
@@ -51,152 +56,62 @@ class Agent_DQN(Agent):
 
             self.online_update_frequency = 4
             self.target_update_frequency = 1000
-            #self.build_model()
-            self.online_model = self.build_model()
-            self.target_model = self.build_model()
-            self.update_target_model()
 
-            self.optimizer = self.optimizer()
-            gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.05)
-            self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
-            K.set_session(self.sess)
-            #self.sess = tf.Session()
-            self.sess.run(tf.global_variables_initializer())
+            self.online_net = DQN(self.action_size)
+            self.target_net = DQN(self.action_size)
+            self.optimizer = torch.optim.Adam(self.online_net.parameters(),lr=self.lr)
+            self.loss_func = nn.MSELoss()
 
-            '''
-            gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1)
-            config = tf.ConfigProto(gpu_options = gpu_options, allow_soft_placement = True)
-            self.sess = tf.Session(config=config)
-            self.sess.run(tf.global_variables_initializer())
-            '''
-            
-            #tf.train.Saver().restore(self.sess, "./model/dqn_model_sum")
-    
-    def optimizer(self):
-        a = K.placeholder(shape=(None,), dtype='int32')
-        y = K.placeholder(shape=(None,), dtype='float32')
-        py_x = self.online_model.output
-        a_one_hot = K.one_hot(a, self.action_size)
-        q_value = K.sum(py_x * a_one_hot, axis=1)
-        error = K.abs(y - q_value)
-        quadratic_part = K.clip(error, 0.0, 1.0)
-        linear_part = error - quadratic_part
-        loss = K.mean(0.5 * K.square(quadratic_part) + linear_part)
-        #opt = RMSprop(lr=self.lr, epsilon=0.01)
-        opt = Adam(lr=self.lr)
-        updates = opt.get_updates(self.online_model.trainable_weights, [], loss)
-        train = K.function([self.online_model.input, a, y], [loss], updates=updates)
-        return train
-    
-
-    def build_model(self):
-        model = Sequential()
-        model.add(Conv2D(32, (8, 8), strides=(4, 4), activation='relu', input_shape=self.state_size, kernel_initializer='he_uniform'))
-        model.add(Conv2D(64, (4, 4), strides=(2, 2), activation='relu', kernel_initializer='he_uniform'))
-        model.add(Conv2D(64, (3, 3), strides=(1, 1), activation='relu', kernel_initializer='he_uniform'))
-        model.add(Flatten())
-        model.add(Dense(512, activation='relu', kernel_initializer='he_uniform'))
-        #model.add(Dense(512, activation='linear'))
-        #model.add(LeakyReLU())
-        model.add(Dense(self.action_size, kernel_initializer='he_uniform'))
-        model.compile(loss='mse', optimizer=Adam(lr=self.lr))
-        return model
-        '''
-        self.s = tf.placeholder(tf.float32, [None, 84, 84, 4])
-        self.s_ = tf.placeholder(tf.float32, [None, 84, 84, 4])
-        self.mask_target = tf.placeholder(tf.float32, [None, self.action_size])
-        
-        with tf.variable_scope('online'):
-            self.online_net = self.build_net(self.s, 'online', [tf.GraphKeys.GLOBAL_VARIABLES, 'online_parameter'])
-        with tf.variable_scope('target'):
-            self.target_net = self.build_net(self.s_, 'target', [tf.GraphKeys.GLOBAL_VARIABLES, 'target_parameter'])
-
-        self.loss = tf.reduce_mean(tf.squared_difference(self.mask_target, self.online_net))
-        self.train_op = tf.train.RMSPropOptimizer(self.lr).minimize(self.loss)
-
-        online_parameter = tf.get_collection('online_parameter')
-        target_parameter = tf.get_collection('target_parameter')
-        self.update_target_op = [tf.assign(t, o) for t, o in zip(target_parameter, online_parameter)]
-        '''
 
     def update_target_model(self):
-        self.target_model.set_weights(self.online_model.get_weights())
-
-    '''
-    def build_net(self, inputs, scope, collection_name):
-        # online network
-        with tf.variable_scope(scope):
-            initializer = tf.contrib.keras.initializers.he_uniform()
-            #collection_name = [scope+'_parameter', tf.GraphKeys.GLOBAL_VARIABLES]
-            conv1 = layers.convolution2d(inputs, num_outputs=32, kernel_size=8, stride=4, activation_fn=tf.nn.relu, weights_initializer=initializer, variables_collections = collection_name)
-            conv2 = layers.convolution2d(conv1, num_outputs=64, kernel_size=4, stride=2, activation_fn=tf.nn.relu, weights_initializer=initializer, variables_collections = collection_name)
-            conv3 = layers.convolution2d(conv2, num_outputs=64, kernel_size=3, stride=1, activation_fn=tf.nn.relu, weights_initializer=initializer, variables_collections = collection_name)
-            conv_out = layers.flatten(conv3)
-            fc = layers.fully_connected(conv_out, num_outputs=512, activation_fn=tf.nn.relu, weights_initializer=initializer, variables_collections = collection_name)
-            #LeakyReLU = tf.contrib.keras.layers.LeakyReLU(alpha=0.3)
-            #fc_out = LeakyReLU(fc)
-            output = layers.fully_connected(fc, num_outputs=self.action_size, activation_fn=None, weights_initializer=initializer, variables_collections = collection_name)
-        return output
-    '''
+        self.target_net.load_state_dict(self.online_net.state_dict())
 
     def init_game_setting(self):
         pass
 
     def make_action(self, observation, test=True):
-        epsilon = 0.0005 if test==True else self.exploration_rate
+        if observation.shape[0] != 4:
+            observation = np.transpose(observation, (2,0,1))
+        #obs = np.expand_dims(observation, axis=0) # -> (1,4,84,84)
+        epsilon = 0.005 if test==True else self.exploration_rate
+        x = Variable(torch.unsqueeze(torch.FloatTensor(observation), 0))
         if np.random.rand() < epsilon:
             return np.random.randint(0, self.action_size)
         else:
-            q = self.online_model.predict(np.expand_dims(observation, axis=0))
-            return np.argmax(q[0])
-        '''
-        if random.random() < epsilon: # random choose action:
-            return np.random.randint(0, self.action_size)
-        else:
-            actions = self.sess.run(self.online_net, feed_dict={self.s: np.expand_dims(observation, axis=0)})[0]
-            vmax = max(actions)
-            a = []
-            for i in range(len(actions)):
-                if actions[i]==vmax:
-                    a.append(i)
-            return random.choice(a)
-        '''
+            actions_value = self.online_net.forward(x)
+            action = torch.max(actions_value, 1)[1].data.numpy()
+            return action[0]
 
     def memory_store(self, m):
         self.Memory[self.memory_count % self.memory_limit] = m
         self.memory_count += 1
 
     def learn(self):
-        ids = np.random.choice(min(self.memory_count, self.memory_limit), size=self.batch_size)
-        s = np.zeros((self.batch_size, 84, 84, 4))
+        ids = np.random.choice(self.memory_limit, size=self.batch_size)
+        s = np.zeros((self.batch_size, 4, 84, 84))
         actions = np.zeros(self.batch_size, dtype=np.int)
         rewards = np.zeros(self.batch_size)
-        s_ = np.zeros((self.batch_size, 84, 84, 4))
+        s_ = np.zeros((self.batch_size, 4, 84, 84))
         for i in range(self.batch_size):
             s[i] = self.Memory[ids[i]][0]
             actions[i] = self.Memory[ids[i]][1]
             rewards[i] = self.Memory[ids[i]][2]
             s_[i] = self.Memory[ids[i]][3]
+
+        v_s = Variable(torch.FloatTensor(s))
+        v_a = Variable(torch.LongTensor(actions))
+        v_r = Variable(torch.FloatTensor(rewards))
+        v_s_ = Variable(torch.FloatTensor(s_))
+
+        q_eval = self.online_net(v_s).gather(1, v_a.view(-1,1))
+        q_next = self.target_net(v_s_).detach()
+        q_target = v_r.view(-1,1) + self.gamma * q_next.max(1)[0].view(self.batch_size, 1)
+        loss = self.loss_func(q_eval, q_target)
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
         
-        #q_online = self.online_model.predict(s)
-        #q_target = self.target_model.predict(s_)
-        #y = q_online.copy()
-        #y[np.arange(self.batch_size), actions] = rewards + self.gamma * np.max(q_target, axis=1)
-        #loss = self.online_model.train_on_batch(s, y)
-        #return loss
-        q_target = self.target_model.predict(s_)
-        y = rewards + self.gamma * np.max(q_target, axis=1)
-        loss = self.optimizer([s, actions, y])
-        return loss
-
-
-        '''
-        online_net, target_net = self.sess.run([self.online_net, self.target_net], 
-                                                feed_dict={self.s: s, self.s_: s_})
-        mask_target = online_net.copy()
-        mask_target[np.arange(self.batch_size), actions] = rewards + self.gamma * np.max(target_net, axis=1)
-        _, cost = self.sess.run([self.train_op, self.loss], feed_dict={self.s: s, self.mask_target: mask_target}) 
-        '''
 
     def train(self):
         #saver = tf.train.Saver()
@@ -204,6 +119,7 @@ class Agent_DQN(Agent):
         result = [] #result for each episode
         for e in range(1, episodes+1):
             obs = self.env.reset()
+            obs = np.transpose(obs, (2,0,1)) # (84,84,4)->(4,84,84)
             episode_reward = 0
             max_q = 0
             num_step = 0
@@ -212,11 +128,12 @@ class Agent_DQN(Agent):
                 a = self.make_action(obs, test=False)
 
                 # add Max_Q value
-                q = self.online_model.predict(np.expand_dims(obs, axis=0))
-                max_q += np.max(q[0])
-                num_step += 1
+                #q = self.online_model.predict(np.expand_dims(obs, axis=0))
+                #max_q += np.max(q[0])
+                #num_step += 1
 
                 obs_, r, done, info = self.env.step(a)
+                obs_ = np.transpose(obs_, (2,0,1)) # (84,84,4)->(4,84,84)
                 episode_reward += r
                 self.memory_store((obs.copy(), a, r, obs_.copy()))
 
@@ -224,11 +141,9 @@ class Agent_DQN(Agent):
 
                 if self.timestep > self.memory_limit and (self.timestep%self.target_update_frequency)==0:
                     self.update_target_model()
-                    #self.sess.run(self.update_target_op)
 
                 if self.timestep > self.memory_limit and (self.timestep%self.online_update_frequency)==0:
-                    loss = self.learn()
-                    #total_loss += loss
+                    self.learn()
 
                 if self.exploration_rate > 0.05:
                     self.exploration_rate -= self.exploration_delta
@@ -240,12 +155,12 @@ class Agent_DQN(Agent):
                     break
 
             rr = np.mean(result[-30:])
-            print("Episode: %d | Reward: %d | Last 30: %f | step: %d | explore: %f | Max_Q: %f" %(e, episode_reward, rr, self.timestep, self.exploration_rate, max_q/num_step))
+            #print("Episode: %d | Reward: %d | Last 30: %f | step: %d | explore: %f | Max_Q: %f" %(e, episode_reward, rr, self.timestep, self.exploration_rate, max_q/num_step))
+            print("Episode: %d | Reward: %d | Last 30: %f | step: %d | explore: %f" %(e, episode_reward, rr, self.timestep, self.exploration_rate))
             if (e%10) == 0:
-                np.save('./result/dqn_keras_result_K.npy',result)
-                self.online_model.save('./model/dqn_keras_online_model_K.h5')
-                self.target_model.save('./model/dqn_keras_target_model_K.h5')
-                #save_path = saver.save(self.sess, "./model/dqn_model03")
+                np.save('./result/dqn_torch_result.npy',result)
+                torch.save(self.online_net, './model/dqn_torch_online_model.pt')
+                torch.save(self.target_net, './model/dqn_torch_target_model.pt')
 
 
 

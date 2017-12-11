@@ -56,12 +56,12 @@ class Agent_DQN(Agent):
             self.target_model = self.build_model()
             self.update_target_model()
 
-            #self.optimizer = self.optimizer()
-            #gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1)
-            #self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
-            #K.set_session(self.sess)
+            self.optimizer = self.optimizer()
+            gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.05)
+            self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
+            K.set_session(self.sess)
             #self.sess = tf.Session()
-            #self.sess.run(tf.global_variables_initializer())
+            self.sess.run(tf.global_variables_initializer())
 
             '''
             gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1)
@@ -71,7 +71,7 @@ class Agent_DQN(Agent):
             '''
             
             #tf.train.Saver().restore(self.sess, "./model/dqn_model_sum")
-    '''
+    
     def optimizer(self):
         a = K.placeholder(shape=(None,), dtype='int32')
         y = K.placeholder(shape=(None,), dtype='float32')
@@ -82,11 +82,12 @@ class Agent_DQN(Agent):
         quadratic_part = K.clip(error, 0.0, 1.0)
         linear_part = error - quadratic_part
         loss = K.mean(0.5 * K.square(quadratic_part) + linear_part)
-        opt = RMSprop(lr=self.lr, epsilon=0.01)
+        #opt = RMSprop(lr=self.lr, epsilon=0.01)
+        opt = Adam(lr=self.lr)
         updates = opt.get_updates(self.online_model.trainable_weights, [], loss)
         train = K.function([self.online_model.input, a, y], [loss], updates=updates)
         return train
-    '''
+    
 
     def build_model(self):
         model = Sequential()
@@ -177,15 +178,16 @@ class Agent_DQN(Agent):
             rewards[i] = self.Memory[ids[i]][2]
             s_[i] = self.Memory[ids[i]][3]
         
-        q_online = self.online_model.predict(s)
-        q_target = self.target_model.predict(s_)
-        y = q_online.copy()
-        y[np.arange(self.batch_size), actions] = rewards + self.gamma * np.max(q_target, axis=1)
-        loss = self.online_model.train_on_batch(s, y)
-        return loss
+        #q_online = self.online_model.predict(s)
         #q_target = self.target_model.predict(s_)
-        #y = rewards + self.gamma * np.max(q_target, axis=1)
-        #loss = self.optimizer([s, actions, y])
+        #y = q_online.copy()
+        #y[np.arange(self.batch_size), actions] = rewards + self.gamma * np.max(q_target, axis=1)
+        #loss = self.online_model.train_on_batch(s, y)
+        #return loss
+        q_target = self.target_model.predict(s_)
+        y = rewards + self.gamma * np.max(q_target, axis=1)
+        loss = self.optimizer([s, actions, y])
+        return loss
 
 
         '''
@@ -237,12 +239,12 @@ class Agent_DQN(Agent):
                     result.append(episode_reward)
                     break
 
-            rr = np.mean(result[-100:])
+            rr = np.mean(result[-30:])
             print("Episode: %d | Reward: %d | Last 100: %f | step: %d | explore: %f | Max_Q: %f | Loss: %f" %(e, episode_reward, rr, self.timestep, self.exploration_rate, max_q/num_step, total_loss/num_step*1000))
             if (e%10) == 0:
-                np.save('./result/dqn_keras_result_q.npy',result)
-                self.online_model.save('./model/dqn_keras_online_model_q.h5')
-                self.target_model.save('./model/dqn_keras_target_model_q.h5')
+                np.save('./result/dqn_keras_result_K.npy',result)
+                self.online_model.save('./model/dqn_keras_online_model_K.h5')
+                self.target_model.save('./model/dqn_keras_target_model_K.h5')
                 #save_path = saver.save(self.sess, "./model/dqn_model03")
 
 

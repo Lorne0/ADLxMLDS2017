@@ -57,9 +57,9 @@ class Agent_DQN(Agent):
             self.online_update_frequency = 4
             self.target_update_frequency = 1000
 
-            self.online_net = DQN(self.action_size)
-            self.target_net = DQN(self.action_size)
-            self.optimizer = torch.optim.Adam(self.online_net.parameters(),lr=self.lr)
+            self.online_net = DQN(self.action_size).cuda()
+            self.target_net = DQN(self.action_size).cuda()
+            self.optimizer = torch.optim.RMSprop(self.online_net.parameters(),lr=self.lr)
             self.loss_func = nn.MSELoss()
 
 
@@ -74,12 +74,12 @@ class Agent_DQN(Agent):
             observation = np.transpose(observation, (2,0,1))
         #obs = np.expand_dims(observation, axis=0) # -> (1,4,84,84)
         epsilon = 0.005 if test==True else self.exploration_rate
-        x = Variable(torch.unsqueeze(torch.FloatTensor(observation), 0))
+        x = Variable(torch.unsqueeze(torch.FloatTensor(observation), 0)).type(torch.cuda.FloatTensor)
         if np.random.rand() < epsilon:
             return np.random.randint(0, self.action_size)
         else:
             actions_value = self.online_net.forward(x)
-            action = torch.max(actions_value, 1)[1].data.numpy()
+            action = torch.max(actions_value, 1)[1].data.cpu().numpy()
             return action[0]
 
     def memory_store(self, m):
@@ -98,14 +98,15 @@ class Agent_DQN(Agent):
             rewards[i] = self.Memory[ids[i]][2]
             s_[i] = self.Memory[ids[i]][3]
 
-        v_s = Variable(torch.FloatTensor(s))
-        v_a = Variable(torch.LongTensor(actions))
-        v_r = Variable(torch.FloatTensor(rewards))
-        v_s_ = Variable(torch.FloatTensor(s_))
+        v_s = Variable(torch.cuda.FloatTensor(s))
+        v_a = Variable(torch.cuda.LongTensor(actions.tolist()))
+        v_r = Variable(torch.cuda.FloatTensor(rewards))
+        v_s_ = Variable(torch.cuda.FloatTensor(s_))
 
-        q_eval = self.online_net(v_s).gather(1, v_a.view(-1,1))
-        q_next = self.target_net(v_s_).detach()
+        q_eval = self.online_net(v_s).gather(1, v_a.view(-1,1)).type(torch.cuda.FloatTensor)
+        q_next = self.target_net(v_s_).detach().type(torch.cuda.FloatTensor)
         q_target = v_r.view(-1,1) + self.gamma * q_next.max(1)[0].view(self.batch_size, 1)
+        q_target = q_target.type(torch.cuda.FloatTensor)
         loss = self.loss_func(q_eval, q_target)
 
         self.optimizer.zero_grad()

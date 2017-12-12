@@ -182,7 +182,7 @@ class Agent_DQN(Agent):
 
             rr = np.mean(result[-100:])
             print("Episode: %d | Reward: %d | Last 100: %f | step: %d | explore: %f" %(e, episode_reward, rr, self.timestep, self.exploration_rate))
-            if (e%10) == 0:
+            if (e%100) == 0:
                 np.save('./result/dqn_keras_result2.npy',result)
                 self.online_model.save('./model/dqn_keras_online_model2.h5')
                 self.target_model.save('./model/dqn_keras_target_model2.h5')

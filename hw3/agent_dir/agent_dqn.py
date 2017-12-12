@@ -84,7 +84,7 @@ class Agent_DQN(Agent):
         model.add(Conv2D(64, (3, 3), strides=(1, 1), activation='relu', kernel_initializer='he_uniform'))
         model.add(Flatten())
         #model.add(Dense(512, activation='relu', kernel_initializer='he_uniform'))
-        model.add(Dense(512, activation='linear'))
+        model.add(Dense(512, activation='linear', kernel_initializer='he_uniform'))
         model.add(LeakyReLU())
         model.add(Dense(self.action_size, kernel_initializer='he_uniform'))
         model.compile(loss='mse', optimizer=RMSprop(lr=self.lr))

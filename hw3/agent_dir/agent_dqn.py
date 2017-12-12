@@ -87,7 +87,7 @@ class Agent_DQN(Agent):
         model.add(Dense(512, activation='linear', kernel_initializer='he_uniform'))
         model.add(LeakyReLU(0.01))
         model.add(Dense(self.action_size, kernel_initializer='he_uniform'))
-        model.compile(loss='mse', optimizer=RMSprop(lr=self.lr*4))
+        model.compile(loss='mse', optimizer=RMSprop(lr=self.lr))
         return model
 
     def update_target_model(self):

@@ -97,7 +97,7 @@ class Agent_DQN(Agent):
         pass
 
     def make_action(self, observation, test=True):
-        epsilon = 0.0005 if test==True else self.exploration_rate
+        epsilon = 0.01 if test==True else self.exploration_rate
         if np.random.rand() < epsilon:
             return np.random.randint(0, self.action_size)
         else:

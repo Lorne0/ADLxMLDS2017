@@ -111,8 +111,8 @@ class Agent_DQN(Agent):
     def learn(self):
         ids = np.random.choice(min(self.memory_count, self.memory_limit), size=self.batch_size)
         s = np.zeros((self.batch_size, 84, 84, 4))
-        actions = np.zeros(self.batch_size, dtype=np.int)
-        rewards = np.zeros(self.batch_size)
+        a = np.zeros(self.batch_size, dtype=np.int)
+        r = np.zeros(self.batch_size)
         s_ = np.zeros((self.batch_size, 84, 84, 4))
         done = np.zeros(self.batch_size, dtype=np.int)
 
@@ -128,9 +128,9 @@ class Agent_DQN(Agent):
         y = q_online.copy()
         for i in range(self.batch_size):
             if done[i]==1:
-                y[i, actions[i]] = rewards[i]
+                y[i, actions[i]] = r[i]
             else:
-                y[i, actions[i]] = rewards[i] + self.gamma * np.max(q_target, axis=1)[i]
+                y[i, actions[i]] = r[i] + self.gamma * (np.max(q_target, axis=1))[i]
 
         loss = self.online_model.train_on_batch(s, y)
         

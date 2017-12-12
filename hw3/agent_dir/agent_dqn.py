@@ -117,11 +117,11 @@ class Agent_DQN(Agent):
         done = np.zeros(self.batch_size, dtype=np.int)
 
         for i in range(self.batch_size):
-            s = self.Memory[ids[i]][0]
-            a = self.Memory[ids[i]][1]
-            r = self.Memory[ids[i]][2]
-            s_ = self.Memory[ids[i]][3]
-            done = self.Memory[ids[i]][4]
+            s[i] = self.Memory[ids[i]][0]
+            a[i] = self.Memory[ids[i]][1]
+            r[i] = self.Memory[ids[i]][2]
+            s_[i] = self.Memory[ids[i]][3]
+            done[i] = self.Memory[ids[i]][4]
         
         q_online = self.online_model.predict(s)
         q_target = self.target_model.predict(s_)

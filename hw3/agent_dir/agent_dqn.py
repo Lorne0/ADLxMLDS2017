@@ -128,9 +128,9 @@ class Agent_DQN(Agent):
         y = q_online.copy()
         for i in range(self.batch_size):
             if done[i]==1:
-                y[i, actions[i]] = r[i]
+                y[i, a[i]] = r[i]
             else:
-                y[i, actions[i]] = r[i] + self.gamma * (np.max(q_target, axis=1))[i]
+                y[i, a[i]] = r[i] + self.gamma * (np.max(q_target, axis=1))[i]
 
         loss = self.online_model.train_on_batch(s, y)
         

@@ -42,6 +42,9 @@ def test(agent, env, total_episodes=30):
             episode_reward += reward
 
         rewards.append(episode_reward)
+        if i%5==0:
+            print("=======")
+        print(i, episode_reward)
     print('Run %d episodes'%(total_episodes))
     print('Mean:', np.mean(rewards))
 

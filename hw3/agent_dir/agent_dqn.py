@@ -20,7 +20,7 @@ class Agent_DQN(Agent):
         if args.test_dqn:
             #you can load your model here
             print('loading trained model')
-            self.online_model = load_model('./model/dqn_keras_online_model_g0.9.h5')
+            self.online_model = load_model('./model/dqn_keras_online_model_g0.85.h5')
             self.env = env
             self.action_size = self.env.action_space.n
             self.exploration_rate = 1.0
@@ -31,7 +31,7 @@ class Agent_DQN(Agent):
             self.exploration_rate = 1.0
             self.exploration_delta = 9.5*1e-7 # after 1000000, exploration_rate will be 0.05
             self.lr = 1e-4
-            self.gamma = 0.9
+            self.gamma = 0.85
             self.batch_size = 32
             self.timestep = 0
 
@@ -151,9 +151,9 @@ class Agent_DQN(Agent):
             rr = np.mean(result[-100:])
             print("Episode: %d | Reward: %d | Last 100: %f | step: %d | explore: %f" %(e, episode_reward, rr, self.timestep, self.exploration_rate))
             if (e%100) == 0:
-                np.save('./result/dqn_keras_result_g0.9.npy',result)
-                self.online_model.save('./model/dqn_keras_online_model_0.9.h5')
-                self.target_model.save('./model/dqn_keras_target_model_0.9.h5')
+                np.save('./result/dqn_keras_result_g0.85.npy',result)
+                self.online_model.save('./model/dqn_keras_online_model_0.85.h5')
+                self.target_model.save('./model/dqn_keras_target_model_0.85.h5')
                 #save_path = saver.save(self.sess, "./model/dqn_model03")
 
 

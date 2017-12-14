@@ -7,7 +7,7 @@ from keras.layers import *
 from keras.models import load_model
 from keras.optimizers import Adam
 from keras import backend as K
-def get_session(gpu_fraction=0.6):
+def get_session(gpu_fraction=0.8):
     gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_fraction)
     return tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
 K.set_session(get_session())

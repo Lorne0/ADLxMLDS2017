@@ -92,6 +92,7 @@ if __name__ == "__main__":
         ep_r = play_game(W.copy(), env, None)
         result.append(ep_r)
         print("Episode: %d | Reward: %d | Last 30 Reward: %f" %(g, ep_r, np.mean(result[-30:])))
+        np.save('es_cartpole_result.npy', result)
 
 
 

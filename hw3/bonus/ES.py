@@ -7,6 +7,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 from keras.models import *
 from keras.layers import *
+from keras.initializers import *
 import gym
 import multiprocessing as mp
 
@@ -27,9 +28,9 @@ def sign(k_id): return -1.0 if k_id % 2 == 0 else 1.0  # mirrored sampling
 
 def build_model():
     model = Sequential()
-    model.add(Dense(20, activation='tanh', kernel_initializer='he_uniform', input_shape=(n_features,)))
-    model.add(Dense(30, activation='tanh', kernel_initializer='he_uniform'))
-    model.add(Dense(n_actions, activation='softmax', kernel_initializer='he_uniform'))
+    model.add(Dense(20, activation='tanh', kernel_initializer=RandomNormal(0.0, 0.1), input_shape=(n_features,)))
+    model.add(Dense(30, activation='tanh', kernel_initializer=RandomNormal(0.0, 0.1)))
+    model.add(Dense(n_actions, activation='linear', kernel_initializer=RandomNormal(0.0, 0.1)))
     return model
 
 def make_action(model, x):
